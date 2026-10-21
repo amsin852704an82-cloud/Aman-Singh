@@ -1,0 +1,7 @@
+{
+  "name": "Bharat Social - Cloud Architecture & Developer Console",
+  "description": "BharatConnect — Modern, mobile-first Indian social media web application with home feed, reels, story viewer, multilingual support (Hindi, English, etc.), and ₹0 local prototype mode.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
