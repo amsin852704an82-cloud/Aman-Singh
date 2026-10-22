@@ -1,12 +1,10 @@
 import React from 'react';
 import { useBharatConnect } from '../../context/BharatConnectContext';
 import { MainTab } from '../../types/bharatConnect';
-import { Home, Clapperboard, Plus, Bell } from 'lucide-react';
+import { Home, Clapperboard, Plus, Bell, GraduationCap } from 'lucide-react';
 
 export const BottomNav: React.FC = () => {
-  const { activeTab, setActiveTab, t, currentUser, notifications } = useBharatConnect();
-
-  const unreadNotifsCount = notifications.filter((n) => !n.isRead).length;
+  const { activeTab, setActiveTab, t, currentUser, unreadNotificationsCount } = useBharatConnect();
 
   const navItems: { id: MainTab; label: string; icon: React.ReactNode; badge?: number }[] = [
     {
@@ -15,9 +13,9 @@ export const BottomNav: React.FC = () => {
       icon: <Home className={`w-5 h-5 ${activeTab === 'home' ? 'fill-orange-400 text-orange-400' : 'text-slate-400'}`} />
     },
     {
-      id: 'reels',
-      label: t.reels,
-      icon: <Clapperboard className={`w-5 h-5 ${activeTab === 'reels' ? 'fill-orange-400 text-orange-400' : 'text-slate-400'}`} />
+      id: 'hunar',
+      label: 'हुनर',
+      icon: <GraduationCap className={`w-5 h-5 ${activeTab === 'hunar' ? 'fill-orange-400 text-orange-400' : 'text-slate-400'}`} />
     },
     {
       id: 'create',
@@ -29,10 +27,15 @@ export const BottomNav: React.FC = () => {
       )
     },
     {
+      id: 'reels',
+      label: t.reels,
+      icon: <Clapperboard className={`w-5 h-5 ${activeTab === 'reels' ? 'fill-orange-400 text-orange-400' : 'text-slate-400'}`} />
+    },
+    {
       id: 'notifications',
-      label: t.notifications,
+      label: 'अलर्ट',
       icon: <Bell className={`w-5 h-5 ${activeTab === 'notifications' ? 'fill-orange-400 text-orange-400' : 'text-slate-400'}`} />,
-      badge: unreadNotifsCount
+      badge: unreadNotificationsCount
     },
     {
       id: 'profile',
@@ -48,8 +51,8 @@ export const BottomNav: React.FC = () => {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur-md border-t border-slate-800/80 px-2 pt-1 pb-safe max-w-lg mx-auto sm:max-w-none">
-      <div className="grid grid-cols-5 items-center justify-items-center h-14">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur-md border-t border-slate-800/80 px-1 sm:px-2 pt-1 pb-safe max-w-lg mx-auto sm:max-w-none">
+      <div className="grid grid-cols-6 items-center justify-items-center h-14">
         {navItems.map((item) => {
           const isActive = activeTab === item.id;
           const isCreate = item.id === 'create';

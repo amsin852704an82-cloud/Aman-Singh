@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useBharatConnect } from '../../context/BharatConnectContext';
-import { Search, TrendingUp, Users, Tag, CheckCircle2, X, Heart, MessageCircle } from 'lucide-react';
+import { Search, TrendingUp, Users, Tag, CheckCircle2, X, Heart, MessageCircle, Mic } from 'lucide-react';
 import { User, Post } from '../../types/bharatConnect';
 
 export const SearchView: React.FC = () => {
@@ -11,7 +11,8 @@ export const SearchView: React.FC = () => {
     toggleFollowUser, 
     toggleLikePost, 
     t, 
-    setToastMessage 
+    setToastMessage,
+    openUserProfile
   } = useBharatConnect();
 
   const [query, setQuery] = useState('');
@@ -138,32 +139,40 @@ export const SearchView: React.FC = () => {
             ) : (
               filteredUsers.map((user) => (
                 <div key={user.id} className="p-3 flex items-center justify-between gap-3 hover:bg-slate-800/30 transition">
-                  <div className="flex items-center gap-3">
+                  <div 
+                    onClick={() => openUserProfile(user)}
+                    className="flex items-center gap-3 cursor-pointer group flex-1 min-w-0"
+                    title="प्रोफ़ाइल देखें (View Profile)"
+                  >
                     <img
-                      src={user.avatar}
-                      alt={user.fullName}
-                      className="w-10 h-10 rounded-full object-cover border border-slate-700"
+                      src={user.photoURL || user.avatar}
+                      alt={user.fullName || user.name}
+                      className="w-10 h-10 rounded-full object-cover border border-slate-700 group-hover:border-orange-500/60 transition shrink-0"
                     />
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-semibold text-white">{user.fullName}</span>
+                        <span className="text-xs font-semibold text-white group-hover:text-orange-400 transition truncate">
+                          {user.fullName || user.name}
+                        </span>
                         {user.verified && (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 fill-blue-400/20" />
+                          <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 fill-blue-400/20 shrink-0" />
                         )}
                       </div>
-                      <span className="text-[11px] text-slate-400">{user.handle} · {user.followersCount} फ़ॉलोअर्स</span>
+                      <span className="text-[11px] text-slate-400 block truncate">
+                        {user.handle} · {user.followersCount} फ़ॉलोअर्स
+                      </span>
                     </div>
                   </div>
 
                   <button
-                    onClick={() => toggleFollowUser(user.id)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition active:scale-95 ${
+                    onClick={() => toggleFollowUser(user)}
+                    className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition active:scale-95 shrink-0 cursor-pointer ${
                       user.isFollowing
-                        ? 'bg-slate-800 text-slate-300 border border-slate-700'
+                        ? 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
                         : 'bg-orange-500 hover:bg-orange-600 text-white shadow-sm'
                     }`}
                   >
-                    {user.isFollowing ? t.unfollow : t.follow}
+                    {user.isFollowing ? 'फ़ॉलो किया' : t.follow}
                   </button>
                 </div>
               ))
@@ -192,11 +201,26 @@ export const SearchView: React.FC = () => {
                   className="group relative aspect-square rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 cursor-pointer shadow-sm"
                   onClick={() => toggleLikePost(post.id)}
                 >
-                  <img
-                    src={post.imageUrl}
-                    alt={post.caption}
-                    className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
-                  />
+                  {post.imageUrl ? (
+                    <img
+                      src={post.imageUrl}
+                      alt={post.caption || 'Post image'}
+                      className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+                    />
+                  ) : post.mediaType === 'audio' || Boolean(post.audioURL) ? (
+                    <div className="w-full h-full p-3 bg-gradient-to-br from-purple-950/70 via-slate-900 to-orange-950/70 flex flex-col justify-between select-none">
+                      <span className="text-[10px] text-purple-300 font-bold flex items-center gap-1">
+                        <Mic className="w-3 h-3 text-orange-400" /> आवाज़
+                      </span>
+                      <p className="text-xs text-white line-clamp-2 font-medium">
+                        {post.audioTitle || post.caption || 'ऑडियो शायरी'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="w-full h-full p-2 bg-gradient-to-br from-orange-950/40 to-slate-900 flex items-center justify-center text-center">
+                      <p className="text-[10px] text-white line-clamp-3">"{post.text || post.caption}"</p>
+                    </div>
+                  )}
                   <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4 text-white">
                     <div className="flex items-center gap-1 text-xs font-bold">
                       <Heart className={`w-4 h-4 ${post.isLiked ? 'fill-rose-500 text-rose-500' : 'fill-white'}`} />

@@ -1,7 +1,8 @@
 import React from 'react';
 import { useBharatConnect } from '../../context/BharatConnectContext';
 import { LanguageCode } from '../../types/bharatConnect';
-import { Globe, Shield, Smartphone, Monitor } from 'lucide-react';
+import { Globe, Shield, Smartphone, Monitor, LogIn, UserCheck, Bell, MessageSquare } from 'lucide-react';
+import { InboxModal } from './InboxModal';
 
 export const Navbar: React.FC = () => {
   const { 
@@ -11,9 +12,15 @@ export const Navbar: React.FC = () => {
     activeTab, 
     setActiveTab, 
     reports,
+    unreadNotificationsCount,
     isPhoneFrame,
-    setIsPhoneFrame
+    setIsPhoneFrame,
+    firebaseUser,
+    setIsAuthModalOpen,
+    currentUser
   } = useBharatConnect();
+
+  const [isInboxOpen, setIsInboxOpen] = React.useState(false);
 
   const pendingReportsCount = reports.filter((r) => r.status === 'pending').length;
 
@@ -94,6 +101,33 @@ export const Navbar: React.FC = () => {
             )}
           </button>
 
+          {/* Notifications Button */}
+          <button
+            onClick={() => setActiveTab('notifications')}
+            className={`relative p-2 rounded-lg border transition-colors cursor-pointer min-h-[40px] min-w-[40px] flex items-center justify-center ${
+              activeTab === 'notifications'
+                ? 'bg-slate-800 border-orange-500/50 text-orange-400'
+                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+            }`}
+            title="सूचनाएं / Notifications"
+          >
+            <Bell className="w-4 h-4" />
+            {unreadNotificationsCount > 0 && (
+              <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 bg-orange-500 text-white rounded-full text-[9px] font-bold flex items-center justify-center font-mono shadow-sm">
+                {unreadNotificationsCount > 99 ? '99+' : unreadNotificationsCount}
+              </span>
+            )}
+          </button>
+
+          {/* Direct Messages Button */}
+          <button
+            onClick={() => setIsInboxOpen(true)}
+            className="relative p-2 rounded-lg border bg-slate-900 border-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer min-h-[40px] min-w-[40px] flex items-center justify-center"
+            title="संदेश / Direct Messages"
+          >
+            <MessageSquare className="w-4 h-4 text-orange-400" />
+          </button>
+
           {/* Admin Moderation Button */}
           <button
             onClick={() => setActiveTab('admin')}
@@ -111,8 +145,41 @@ export const Navbar: React.FC = () => {
               </span>
             )}
           </button>
+
+          {/* Firebase Auth Account Button */}
+          <button
+            onClick={() => {
+              if (firebaseUser) {
+                setActiveTab('profile');
+              } else {
+                setIsAuthModalOpen(true);
+              }
+            }}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/30 text-xs font-semibold transition active:scale-95 cursor-pointer min-h-[40px]"
+            title={firebaseUser ? `लॉगिन: ${currentUser.name || currentUser.fullName}` : 'Firebase लॉगिन / साइन अप'}
+          >
+            {firebaseUser ? (
+              <>
+                <UserCheck className="w-4 h-4 text-emerald-400" />
+                <span className="hidden sm:inline text-[11px] font-bold text-slate-200 truncate max-w-[80px]">
+                  {(currentUser.name || currentUser.fullName).split(' ')[0]}
+                </span>
+              </>
+            ) : (
+              <>
+                <LogIn className="w-4 h-4" />
+                <span className="text-[11px] font-bold">लॉगिन</span>
+              </>
+            )}
+          </button>
         </div>
       </div>
+
+      {/* Direct Messaging Inbox Modal */}
+      <InboxModal
+        isOpen={isInboxOpen}
+        onClose={() => setIsInboxOpen(false)}
+      />
     </header>
   );
 };

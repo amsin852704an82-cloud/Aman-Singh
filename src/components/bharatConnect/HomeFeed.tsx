@@ -17,8 +17,17 @@ import {
   Sparkles, 
   Smartphone,
   Share2,
-  Trash2
+  Trash2,
+  Users,
+  Edit3,
+  X,
+  Check,
+  Loader2,
+  Mic,
+  Radio
 } from 'lucide-react';
+import { AwaazAudioCard } from './AwaazAudioCard';
+import { AwaazRecordModal } from './AwaazRecordModal';
 
 export const HomeFeed: React.FC = () => {
   const { 
@@ -30,16 +39,49 @@ export const HomeFeed: React.FC = () => {
     toggleLikePost, 
     toggleSavePost, 
     toggleFollowUser,
+    addComment,
     setActiveTab,
     setToastMessage,
-    deletePost
+    deletePost,
+    updatePostCaption,
+    openUserProfile,
+    followingIds
   } = useBharatConnect();
 
   const [activeStory, setActiveStory] = useState<Story | null>(null);
   const [commentingPost, setCommentingPost] = useState<Post | null>(null);
   const [reportingPost, setReportingPost] = useState<Post | null>(null);
+  const [editingPost, setEditingPost] = useState<Post | null>(null);
+  const [editCaptionText, setEditCaptionText] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [openMenuPostId, setOpenMenuPostId] = useState<string | null>(null);
   const [likedAnimPostId, setLikedAnimPostId] = useState<string | null>(null);
   const [inlineComments, setInlineComments] = useState<{ [postId: string]: string }>({});
+  const [feedTab, setFeedTab] = useState<'explore' | 'following' | 'awaaz'>('explore');
+  const [isAwaazRecordOpen, setIsAwaazRecordOpen] = useState(false);
+
+  const handleStartEdit = (post: Post) => {
+    setEditingPost(post);
+    setEditCaptionText(post.text || post.caption || '');
+    setOpenMenuPostId(null);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingPost) return;
+    const txt = editCaptionText.trim();
+    if (!txt) {
+      setToastMessage('कैप्शन खाली नहीं हो सकता');
+      return;
+    }
+    setIsSavingEdit(true);
+    try {
+      await updatePostCaption(editingPost.id, txt);
+      setEditingPost(null);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
 
   const handleDoubleTapLike = (post: Post) => {
     if (!post.isLiked) {
@@ -58,28 +100,57 @@ export const HomeFeed: React.FC = () => {
     e.preventDefault();
     const txt = inlineComments[postId]?.trim();
     if (!txt) return;
-    const post = posts.find((p) => p.id === postId);
-    if (post) {
-      post.comments.push({
-        id: `c_${Date.now()}`,
-        author: currentUser,
-        text: txt,
-        createdAt: 'Just now',
-        likesCount: 0
-      });
-      post.commentsCount += 1;
-      setInlineComments((prev) => ({ ...prev, [postId]: '' }));
-      setToastMessage('टिप्पणी पोस्ट की गई (Comment Added)');
-    }
+    addComment(postId, txt);
+    setInlineComments((prev) => ({ ...prev, [postId]: '' }));
   };
 
-  const suggestedUsers = users.filter((u) => u.id !== currentUser.id && !u.isFollowing);
+  const currentUid = currentUser.uid || currentUser.id;
+  const suggestedUsers = users.filter((u) => u.id !== currentUid && (u.uid ? u.uid !== currentUid : true));
 
   return (
     <div className="max-w-4xl mx-auto pb-24 pt-2">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Main Column (8 cols on lg) */}
         <div className="lg:col-span-7 space-y-4">
+          {/* Authenticated User Profile Banner on Home Feed */}
+          <div className="bg-gradient-to-r from-orange-950/40 via-slate-900 to-emerald-950/40 border border-slate-800 rounded-2xl p-4 flex items-center justify-between gap-3 shadow-sm backdrop-blur-sm">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="relative shrink-0">
+                <div className="w-12 h-12 rounded-full p-0.5 bg-gradient-to-tr from-orange-500 via-amber-400 to-emerald-500 shadow-md">
+                  <img
+                    src={currentUser.photoURL || currentUser.avatar}
+                    alt={currentUser.name || currentUser.fullName}
+                    className="w-full h-full rounded-full object-cover border-2 border-slate-950"
+                  />
+                </div>
+                <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-slate-950 rounded-full" title="सक्रिय (Online)" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] text-orange-400 font-semibold">नमस्ते 🇮🇳</span>
+                  <span className="text-sm font-bold text-white truncate max-w-[180px]">
+                    {currentUser.name || currentUser.fullName}
+                  </span>
+                  {currentUser.verified && (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 fill-blue-400/20 shrink-0" />
+                  )}
+                </div>
+                <div className="text-[11px] text-slate-400 truncate">
+                  {currentUser.handle} {currentUser.email && `· ${currentUser.email}`}
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setActiveTab('create')}
+              className="px-3 py-2 rounded-xl bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 text-orange-400 text-xs font-semibold flex items-center gap-1.5 transition active:scale-95 shrink-0"
+              title="नई पोस्ट बनाएं"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">नई पोस्ट (+)</span>
+            </button>
+          </div>
+
           {/* Stories Horizontal Strip */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 overflow-x-auto no-scrollbar shadow-sm">
             <div className="flex items-center gap-3.5 min-w-max">
@@ -90,8 +161,8 @@ export const HomeFeed: React.FC = () => {
               >
                 <div className="relative w-15 h-15 rounded-full p-0.5 border border-slate-700">
                   <img
-                    src={currentUser.avatar}
-                    alt={currentUser.fullName}
+                    src={currentUser.photoURL || currentUser.avatar}
+                    alt={currentUser.name || currentUser.fullName}
                     className="w-full h-full rounded-full object-cover"
                   />
                   <div className="absolute bottom-0 right-0 w-4.5 h-4.5 bg-orange-500 text-white rounded-full flex items-center justify-center border-2 border-slate-900">
@@ -99,7 +170,7 @@ export const HomeFeed: React.FC = () => {
                   </div>
                 </div>
                 <span className="text-[11px] font-medium text-slate-300 truncate max-w-[64px]">
-                  आपकी स्टोरी
+                  {currentUser.name ? currentUser.name.split(' ')[0] : 'आपकी स्टोरी'}
                 </span>
               </div>
 
@@ -129,154 +200,381 @@ export const HomeFeed: React.FC = () => {
             </div>
           </div>
 
+          {/* Feed Switcher Tabs: Explore vs Following vs Awaaz */}
+          <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800 shadow-sm">
+            <button
+              onClick={() => setFeedTab('explore')}
+              className={`flex-1 py-2 text-[11px] sm:text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                feedTab === 'explore'
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>एक्सप्लोर</span>
+            </button>
+
+            <button
+              onClick={() => setFeedTab('following')}
+              className={`flex-1 py-2 text-[11px] sm:text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                feedTab === 'following'
+                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>फ़ॉलोइंग ({followingIds.length})</span>
+            </button>
+
+            <button
+              onClick={() => setFeedTab('awaaz')}
+              className={`flex-1 py-2 text-[11px] sm:text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                feedTab === 'awaaz'
+                  ? 'bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 text-white shadow-md shadow-purple-500/20'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Mic className="w-3.5 h-3.5 text-orange-400" />
+              <span>🎙️ आवाज़</span>
+            </button>
+          </div>
+
+          {/* Awaaz Banner when Awaaz tab is selected */}
+          {feedTab === 'awaaz' && (
+            <div className="bg-gradient-to-r from-purple-950/50 via-slate-900 to-orange-950/50 border border-purple-500/30 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-500/30 text-purple-400 flex items-center justify-center shrink-0">
+                  <Radio className="w-5 h-5 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                    <span>आवाज़ (Awaaz) Feed</span>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-medium">
+                      ऑडियो व शायरी
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-300">
+                    अपनी आवाज़ में कविता, शायरी, लोकगीत या विचार रिकॉर्ड करें व सुनें।
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setIsAwaazRecordOpen(true)}
+                className="w-full sm:w-auto px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 hover:from-purple-500 hover:to-orange-400 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md active:scale-95 transition cursor-pointer"
+              >
+                <Mic className="w-4 h-4" />
+                <span>नई आवाज़ रिकॉर्ड करें</span>
+              </button>
+            </div>
+          )}
+
           {/* Posts Stream */}
           <div className="space-y-4">
-            {posts.map((post) => (
-              <article
-                key={post.id}
-                className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm"
-              >
-                {/* Post Header */}
-                <div className="p-3.5 flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <img
-                      src={post.author.avatar}
-                      alt={post.author.fullName}
-                      className="w-9 h-9 rounded-full object-cover border border-slate-700"
-                    />
-                    <div>
-                      <div className="flex items-center gap-1">
-                        <span className="font-bold text-xs text-white hover:text-orange-400 cursor-pointer">
-                          {post.author.fullName}
-                        </span>
-                        {post.author.verified && (
-                          <CheckCircle2 className="w-3.5 h-3.5 text-orange-400 fill-orange-400/20" />
-                        )}
-                        <span className="text-[11px] text-slate-400 font-normal">
-                          {post.author.handle}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1 text-[11px] text-slate-400">
-                        <MapPin className="w-3 h-3 text-slate-500" />
-                        <span className="truncate max-w-[180px]">{post.locationName}</span>
-                        <span aria-hidden="true">·</span>
-                        <span>{post.createdAt}</span>
-                      </div>
+            {(() => {
+              const displayedPosts = feedTab === 'following'
+                ? posts.filter((p) => {
+                    const authorUid = p.authorUid || p.authorId || p.author?.id || p.author?.uid;
+                    return authorUid && followingIds.includes(authorUid);
+                  })
+                : feedTab === 'awaaz'
+                ? posts.filter((p) => p.mediaType === 'audio' || Boolean(p.audioURL))
+                : posts;
+
+              if (feedTab === 'following' && displayedPosts.length === 0) {
+                return (
+                  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-orange-500/10 border border-orange-500/20 text-orange-400 mx-auto flex items-center justify-center shadow-inner">
+                      <Users className="w-6 h-6" />
                     </div>
-                  </div>
-
-                  {/* Actions: delete if own post, report if others */}
-                  <div className="flex items-center gap-1.5">
-                    {post.author.id === currentUser.id ? (
-                      <>
-                        <span className="px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/30 text-[10px] font-bold">
-                          आपकी पोस्ट
-                        </span>
-                        <button
-                          onClick={() => {
-                            if (confirm('क्या आप वाकई अपनी यह पोस्ट हटाना चाहते हैं?')) {
-                              deletePost(post.id);
-                            }
-                          }}
-                          className="p-1.5 text-slate-400 hover:text-red-400 rounded-lg transition"
-                          title="पोस्ट हटाएं (Delete Post)"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        onClick={() => setReportingPost(post)}
-                        className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer"
-                        title="रिपोर्ट या विकल्प"
-                      >
-                        <MoreHorizontal className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Post Image with Double-Tap Gesture */}
-                <div
-                  onDoubleClick={() => handleDoubleTapLike(post)}
-                  className="relative aspect-square sm:aspect-[4/3] bg-slate-950 overflow-hidden cursor-pointer select-none group"
-                >
-                  <img
-                    src={post.imageUrl}
-                    alt={post.caption}
-                    className="w-full h-full object-cover"
-                    loading="lazy"
-                  />
-
-                  {/* Double tap heart explosion animation */}
-                  {likedAnimPostId === post.id && (
-                    <div className="absolute inset-0 flex items-center justify-center animate-ping">
-                      <Heart className="w-24 h-24 fill-rose-500 text-rose-500 drop-shadow-xl" />
-                    </div>
-                  )}
-                </div>
-
-                {/* Action Buttons Bar */}
-                <div className="p-3.5 pb-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      {/* Like button */}
-                      <button
-                        onClick={() => toggleLikePost(post.id)}
-                        className={`min-h-[44px] min-w-[44px] flex items-center justify-center transition-transform active:scale-125 cursor-pointer ${
-                          post.isLiked ? 'text-rose-500' : 'text-slate-200 hover:text-rose-400'
-                        }`}
-                      >
-                        <Heart className={`w-6 h-6 ${post.isLiked ? 'fill-rose-500 text-rose-500' : ''}`} />
-                      </button>
-
-                      {/* Comment button */}
-                      <button
-                        onClick={() => setCommentingPost(post)}
-                        className="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-200 hover:text-blue-400 transition-colors cursor-pointer"
-                      >
-                        <MessageCircle className="w-6 h-6" />
-                      </button>
-
-                      {/* Share button */}
-                      <button
-                        onClick={() => handleShare(post)}
-                        className="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-200 hover:text-emerald-400 transition-colors cursor-pointer"
-                      >
-                        <Send className="w-5 h-5 -rotate-12" />
-                      </button>
-                    </div>
-
-                    {/* Bookmark Save button */}
+                    <h3 className="text-sm font-bold text-white">आपने अभी तक किसी को फॉलो नहीं किया है</h3>
+                    <p className="text-xs text-slate-400 max-w-sm mx-auto leading-relaxed">
+                      जब आप क्रिएटर्स को फ़ॉलो करेंगे, तो उनके ताज़ा विचार और तस्वीरें यहाँ दिखाई देंगी।
+                    </p>
                     <button
-                      onClick={() => toggleSavePost(post.id)}
-                      className={`min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors cursor-pointer ${
-                        post.isSaved ? 'text-amber-400' : 'text-slate-200 hover:text-amber-300'
-                      }`}
+                      onClick={() => setFeedTab('explore')}
+                      className="px-4 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs font-bold shadow-md active:scale-95 transition cursor-pointer"
                     >
-                      <Bookmark className={`w-6 h-6 ${post.isSaved ? 'fill-amber-400 text-amber-400' : ''}`} />
+                      एक्सप्लोर फ़ीड देखें (Explore)
                     </button>
                   </div>
+                );
+              }
 
-                  {/* Likes Count */}
-                  <p className="text-xs font-bold text-white mt-1 font-mono tabular-nums">
-                    {post.likesCount.toLocaleString()} {t.likes}
-                  </p>
-
-                  {/* Caption */}
-                  <div className="text-xs text-slate-200 mt-1.5 leading-relaxed">
-                    <span className="font-bold mr-1 text-white">{post.author.fullName}</span>
-                    <span className="whitespace-pre-line">{post.caption}</span>
+              if (feedTab === 'awaaz' && displayedPosts.length === 0) {
+                return (
+                  <div className="bg-slate-900 border border-purple-500/30 rounded-2xl p-8 text-center space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400 mx-auto flex items-center justify-center shadow-inner">
+                      <Mic className="w-6 h-6" />
+                    </div>
+                    <h3 className="text-sm font-bold text-white">अभी कोई आवाज़ पोस्ट नहीं है</h3>
+                    <p className="text-xs text-slate-400 max-w-sm mx-auto leading-relaxed">
+                      पहली आवाज़ आपकी हो सकती है! अपनी पसंदीदा शायरी, दोहा या विचार रिकॉर्ड करें।
+                    </p>
+                    <button
+                      onClick={() => setIsAwaazRecordOpen(true)}
+                      className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-purple-600 to-orange-500 text-white text-xs font-bold shadow-md active:scale-95 transition cursor-pointer"
+                    >
+                      🎙️ आवाज़ रिकॉर्ड करें
+                    </button>
                   </div>
+                );
+              }
 
-                  {/* Hashtags */}
-                  <div className="flex flex-wrap gap-1.5 mt-2 text-xs font-medium text-orange-400">
-                    {post.tags.map((t) => (
-                      <span key={t} className="hover:underline cursor-pointer">
-                        #{t}
-                      </span>
-                    ))}
-                  </div>
+              return displayedPosts.map((post) => {
+              const authorName = post.author?.name || post.author?.fullName || post.authorName || 'भारत नागरिक';
+                const authorAvatar = post.author?.photoURL || post.author?.avatar || post.authorPhotoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80';
+                const authorHandle = post.author?.handle || `@${authorName.toLowerCase().replace(/\s+/g, '')}`;
+                const isMyPost = (post.authorUid && currentUser.uid && post.authorUid === currentUser.uid) ||
+                                 (post.authorId && currentUser.uid && post.authorId === currentUser.uid) ||
+                                 (post.author?.id && post.author.id === currentUser.id);
+                const postText = post.text || post.caption || '';
+                const postImg = post.imageUrl || post.imageURL || '';
+                const currentLikes = typeof post.likeCount === 'number' ? post.likeCount : (post.likesCount || 0);
+
+                return (
+                  <article
+                    key={post.id}
+                    className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm"
+                  >
+                    {/* Post Header */}
+                    <div className="p-3.5 flex items-center justify-between">
+                      <div 
+                        onClick={() => post.author && openUserProfile(post.author)}
+                        className="flex items-center gap-2.5 cursor-pointer group"
+                        title="प्रोफ़ाइल देखें (View Profile)"
+                      >
+                        <img
+                          src={authorAvatar}
+                          alt={authorName}
+                          className="w-9 h-9 rounded-full object-cover border border-slate-700 group-hover:border-orange-500/60 transition"
+                        />
+                        <div>
+                          <div className="flex items-center gap-1">
+                            <span className="font-bold text-xs text-white group-hover:text-orange-400 transition">
+                              {authorName}
+                            </span>
+                            {post.author?.verified && (
+                              <CheckCircle2 className="w-3.5 h-3.5 text-orange-400 fill-orange-400/20" />
+                            )}
+                            <span className="text-[11px] text-slate-400 font-normal">
+                              {authorHandle}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                            <MapPin className="w-3 h-3 text-slate-500" />
+                            <span className="truncate max-w-[180px]">{post.locationName || 'भारत'}</span>
+                            <span aria-hidden="true">·</span>
+                            <span>{post.createdAt}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Actions: 3-dot options menu for own posts, report for others */}
+                      <div className="relative flex items-center gap-1.5">
+                        {isMyPost && (
+                          <span className="hidden sm:inline px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/30 text-[10px] font-bold">
+                            आपकी पोस्ट
+                          </span>
+                        )}
+
+                        <button
+                          onClick={() => setOpenMenuPostId((prev) => (prev === post.id ? null : post.id))}
+                          className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition cursor-pointer"
+                          title="विकल्प (Options)"
+                        >
+                          <MoreHorizontal className="w-4 h-4" />
+                        </button>
+
+                        {/* Options Dropdown Menu */}
+                        {openMenuPostId === post.id && (
+                          <div className="absolute right-0 top-8 z-30 w-48 bg-slate-900 border border-slate-700/80 rounded-2xl shadow-2xl py-1.5 text-xs text-slate-200 animate-fade-in backdrop-blur-md">
+                            {isMyPost ? (
+                              <>
+                                <button
+                                  onClick={() => handleStartEdit(post)}
+                                  className="w-full px-3.5 py-2 text-left hover:bg-slate-800/80 flex items-center gap-2.5 text-slate-200 transition"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5 text-orange-400" />
+                                  <span>कैप्शन बदलें (Edit Caption)</span>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    toggleSavePost(post.id);
+                                    setOpenMenuPostId(null);
+                                  }}
+                                  className="w-full px-3.5 py-2 text-left hover:bg-slate-800/80 flex items-center gap-2.5 text-slate-200 transition"
+                                >
+                                  <Bookmark className={`w-3.5 h-3.5 ${post.isSaved ? 'text-amber-400 fill-amber-400' : 'text-slate-400'}`} />
+                                  <span>{post.isSaved ? 'सेव से हटाएं (Unsave)' : 'पोस्ट सेव करें (Save Post)'}</span>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    handleShare(post);
+                                    setOpenMenuPostId(null);
+                                  }}
+                                  className="w-full px-3.5 py-2 text-left hover:bg-slate-800/80 flex items-center gap-2.5 text-slate-200 transition"
+                                >
+                                  <Share2 className="w-3.5 h-3.5 text-blue-400" />
+                                  <span>लिंक कॉपी करें (Share)</span>
+                                </button>
+                                <div className="my-1 border-t border-slate-800" />
+                                <button
+                                  onClick={() => {
+                                    setOpenMenuPostId(null);
+                                    if (confirm('क्या आप वाकई अपनी यह पोस्ट हटाना चाहते हैं?')) {
+                                      deletePost(post.id);
+                                    }
+                                  }}
+                                  className="w-full px-3.5 py-2 text-left hover:bg-rose-500/10 text-rose-400 flex items-center gap-2.5 transition"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>पोस्ट हटाएं (Delete)</span>
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    toggleSavePost(post.id);
+                                    setOpenMenuPostId(null);
+                                  }}
+                                  className="w-full px-3.5 py-2 text-left hover:bg-slate-800/80 flex items-center gap-2.5 text-slate-200 transition"
+                                >
+                                  <Bookmark className={`w-3.5 h-3.5 ${post.isSaved ? 'text-amber-400 fill-amber-400' : 'text-slate-400'}`} />
+                                  <span>{post.isSaved ? 'सेव से हटाएं (Unsave)' : 'पोस्ट सेव करें (Save Post)'}</span>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    handleShare(post);
+                                    setOpenMenuPostId(null);
+                                  }}
+                                  className="w-full px-3.5 py-2 text-left hover:bg-slate-800/80 flex items-center gap-2.5 text-slate-200 transition"
+                                >
+                                  <Share2 className="w-3.5 h-3.5 text-blue-400" />
+                                  <span>लिंक कॉपी करें</span>
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setReportingPost(post);
+                                    setOpenMenuPostId(null);
+                                  }}
+                                  className="w-full px-3.5 py-2 text-left hover:bg-rose-500/10 text-rose-400 flex items-center gap-2.5 transition"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                  <span>रिपोर्ट करें</span>
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Post Content: Audio Player OR Image with Double-Tap Gesture OR Stylized Text Card */}
+                    {post.mediaType === 'audio' || Boolean(post.audioURL) ? (
+                      <AwaazAudioCard post={post} />
+                    ) : postImg ? (
+                      <div
+                        onDoubleClick={() => handleDoubleTapLike(post)}
+                        className="relative aspect-square sm:aspect-[4/3] bg-slate-950 overflow-hidden cursor-pointer select-none group"
+                      >
+                        <img
+                          src={postImg}
+                          alt={postText || 'Post image'}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+
+                        {/* Double tap heart explosion animation */}
+                        {likedAnimPostId === post.id && (
+                          <div className="absolute inset-0 flex items-center justify-center animate-ping">
+                            <Heart className="w-24 h-24 fill-rose-500 text-rose-500 drop-shadow-xl" />
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div
+                        onDoubleClick={() => handleDoubleTapLike(post)}
+                        className="relative min-h-[140px] p-6 bg-gradient-to-br from-orange-950/30 via-slate-950 to-emerald-950/30 border-y border-slate-800/80 flex flex-col items-center justify-center text-center cursor-pointer select-none"
+                      >
+                        <p className="text-sm sm:text-base font-semibold text-white leading-relaxed max-w-lg">
+                          "{postText}"
+                        </p>
+                        <span className="text-[10px] text-orange-400 mt-2 font-mono">🇮🇳 BharatConnect Post</span>
+                        {likedAnimPostId === post.id && (
+                          <div className="absolute inset-0 flex items-center justify-center animate-ping">
+                            <Heart className="w-20 h-20 fill-rose-500 text-rose-500 drop-shadow-xl" />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Action Buttons Bar */}
+                    <div className="p-3.5 pb-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          {/* Like button */}
+                          <button
+                            onClick={() => toggleLikePost(post.id)}
+                            className={`min-h-[44px] min-w-[44px] flex items-center justify-center transition-transform active:scale-125 cursor-pointer ${
+                              post.isLiked ? 'text-rose-500' : 'text-slate-200 hover:text-rose-400'
+                            }`}
+                          >
+                            <Heart className={`w-6 h-6 ${post.isLiked ? 'fill-rose-500 text-rose-500' : ''}`} />
+                          </button>
+
+                          {/* Comment button */}
+                          <button
+                            onClick={() => setCommentingPost(post)}
+                            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-200 hover:text-blue-400 transition-colors cursor-pointer"
+                          >
+                            <MessageCircle className="w-6 h-6" />
+                          </button>
+
+                          {/* Share button */}
+                          <button
+                            onClick={() => handleShare(post)}
+                            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-200 hover:text-emerald-400 transition-colors cursor-pointer"
+                          >
+                            <Send className="w-5 h-5 -rotate-12" />
+                          </button>
+                        </div>
+
+                        {/* Bookmark Save button */}
+                        <button
+                          onClick={() => toggleSavePost(post.id)}
+                          className={`min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors cursor-pointer ${
+                            post.isSaved ? 'text-amber-400' : 'text-slate-200 hover:text-amber-300'
+                          }`}
+                        >
+                          <Bookmark className={`w-6 h-6 ${post.isSaved ? 'fill-amber-400 text-amber-400' : ''}`} />
+                        </button>
+                      </div>
+
+                      {/* Likes Count */}
+                      <p className="text-xs font-bold text-white mt-1 font-mono tabular-nums">
+                        {currentLikes.toLocaleString()} {t.likes}
+                      </p>
+
+                      {/* Caption (only if image was present, or to show author attribution) */}
+                      {postImg && postText && (
+                        <div className="text-xs text-slate-200 mt-1.5 leading-relaxed">
+                          <span className="font-bold mr-1 text-white">{authorName}</span>
+                          <span className="whitespace-pre-line">{postText}</span>
+                        </div>
+                      )}
+
+                      {/* Hashtags */}
+                      {post.tags && post.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 mt-2 text-xs font-medium text-orange-400">
+                          {post.tags.map((tg) => (
+                            <span key={tg} className="hover:underline cursor-pointer">
+                              #{tg}
+                            </span>
+                          ))}
+                        </div>
+                      )}
 
                   {/* Comments Preview */}
                   {post.comments.length > 0 && (
@@ -320,7 +618,9 @@ export const HomeFeed: React.FC = () => {
                   </form>
                 </div>
               </article>
-            ))}
+            );
+          });
+        })()}
           </div>
         </div>
 
@@ -377,29 +677,37 @@ export const HomeFeed: React.FC = () => {
             </div>
 
             <div className="space-y-3">
-              {suggestedUsers.slice(0, 3).map((user) => (
+              {suggestedUsers.slice(0, 4).map((user) => (
                 <div key={user.id} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
+                  <div 
+                    onClick={() => openUserProfile(user)}
+                    className="flex items-center gap-2.5 cursor-pointer group"
+                    title="प्रोफ़ाइल देखें (View Profile)"
+                  >
                     <img
-                      src={user.avatar}
-                      alt={user.fullName}
-                      className="w-9 h-9 rounded-full object-cover"
+                      src={user.photoURL || user.avatar}
+                      alt={user.fullName || user.name}
+                      className="w-9 h-9 rounded-full object-cover group-hover:ring-2 ring-orange-500/50 transition"
                     />
                     <div>
-                      <span className="text-xs font-semibold text-white block truncate max-w-[120px]">
-                        {user.fullName}
+                      <span className="text-xs font-semibold text-white block truncate max-w-[120px] group-hover:text-orange-400 transition">
+                        {user.fullName || user.name}
                       </span>
                       <span className="text-[11px] text-slate-400 truncate max-w-[120px] block">
-                        {user.location.split(',')[0]}
+                        {user.followersCount} फ़ॉलोअर्स
                       </span>
                     </div>
                   </div>
 
                   <button
-                    onClick={() => toggleFollowUser(user.id)}
-                    className="px-3 py-1 bg-orange-500 hover:bg-orange-600 text-slate-950 font-bold rounded-lg text-xs transition-colors cursor-pointer"
+                    onClick={() => toggleFollowUser(user)}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                      user.isFollowing
+                        ? 'bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700'
+                        : 'bg-orange-500 hover:bg-orange-600 text-white shadow-sm'
+                    }`}
                   >
-                    {t.follow}
+                    {user.isFollowing ? 'फ़ॉलो किया' : t.follow}
                   </button>
                 </div>
               ))}
@@ -449,6 +757,94 @@ export const HomeFeed: React.FC = () => {
       <ReportModal
         targetPost={reportingPost}
         onClose={() => setReportingPost(null)}
+      />
+
+      {/* Edit Post Caption Modal */}
+      {editingPost && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-2xl">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-orange-400" />
+                <h3 className="font-bold text-sm text-white">
+                  पोस्ट का कैप्शन बदलें (Edit Caption)
+                </h3>
+              </div>
+              <button
+                onClick={() => setEditingPost(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-xl hover:bg-slate-800 transition"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Post Thumbnail Preview if image exists */}
+            {(editingPost.imageUrl || editingPost.imageURL) && (
+              <div className="aspect-video w-full rounded-2xl overflow-hidden bg-slate-950 border border-slate-800">
+                <img
+                  src={editingPost.imageUrl || editingPost.imageURL}
+                  alt="Post preview"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            )}
+
+            {/* Edit Caption Form */}
+            <form onSubmit={handleSaveEdit} className="space-y-4">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-xs">
+                  <label className="text-slate-300 font-medium">नया कैप्शन लिखें:</label>
+                  <span className="text-[11px] text-slate-500">{editCaptionText.length} / 500</span>
+                </div>
+                <textarea
+                  value={editCaptionText}
+                  onChange={(e) => setEditCaptionText(e.target.value)}
+                  maxLength={500}
+                  rows={4}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-3 text-xs sm:text-sm text-white focus:outline-none focus:border-orange-500 transition resize-none leading-relaxed"
+                  placeholder="नया कैप्शन दर्ज करें..."
+                  autoFocus
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setEditingPost(null)}
+                  disabled={isSavingEdit}
+                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+                >
+                  रद्द करें (Cancel)
+                </button>
+                <button
+                  type="submit"
+                  disabled={!editCaptionText.trim() || isSavingEdit}
+                  className="px-5 py-2 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 disabled:opacity-50 text-white text-xs font-bold shadow-md transition flex items-center gap-1.5 active:scale-95"
+                >
+                  {isSavingEdit ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                      <span>सेव हो रहा है...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-3.5 h-3.5" />
+                      <span>बदलाव सेव करें</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Awaaz Live Audio Recorder / Shayari Modal */}
+      <AwaazRecordModal 
+        isOpen={isAwaazRecordOpen} 
+        onClose={() => setIsAwaazRecordOpen(false)} 
       />
     </div>
   );

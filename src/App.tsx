@@ -4,26 +4,57 @@
  */
 
 import React from 'react';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import { BharatConnectProvider, useBharatConnect } from './context/BharatConnectContext';
 import { Navbar } from './components/bharatConnect/Navbar';
 import { BottomNav } from './components/bharatConnect/BottomNav';
 import { HomeFeed } from './components/bharatConnect/HomeFeed';
+import { HunarView } from './components/bharatConnect/HunarView';
 import { ReelsView } from './components/bharatConnect/ReelsView';
 import { CreatePostView } from './components/bharatConnect/CreatePostView';
 import { SearchView } from './components/bharatConnect/SearchView';
 import { NotificationsView } from './components/bharatConnect/NotificationsView';
 import { ProfileView } from './components/bharatConnect/ProfileView';
 import { AdminView } from './components/bharatConnect/AdminView';
+import { LoginPage } from './components/bharatConnect/LoginPage';
 import { AuthModal } from './components/bharatConnect/AuthModal';
-import { CheckCircle2, Smartphone } from 'lucide-react';
+import { UserProfileModal } from './components/bharatConnect/UserProfileModal';
+import { CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 
 const BharatConnectContent: React.FC = () => {
-  const { activeTab, isPhoneFrame, toastMessage } = useBharatConnect();
+  const { activeTab, isPhoneFrame, toastMessage, viewingUser, setViewingUser } = useBharatConnect();
+  const { user, isDemoMode, loading } = useAuth();
+
+  // If loading auth state from Firebase
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center space-y-4">
+        <div className="w-16 h-16 rounded-2xl p-1 bg-gradient-to-tr from-orange-500 via-amber-400 to-emerald-500 shadow-2xl flex items-center justify-center animate-pulse">
+          <div className="w-full h-full bg-slate-950 rounded-xl flex items-center justify-center">
+            <span className="text-2xl font-black bg-gradient-to-r from-orange-400 via-white to-emerald-400 bg-clip-text text-transparent">
+              भा
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-orange-400 font-semibold">
+          <Loader2 className="w-4 h-4 animate-spin text-orange-500" />
+          <span>BharatConnect लोड हो रहा है...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // If user is not authenticated and not in demo mode, show Login/Signup page
+  if (!user && !isDemoMode) {
+    return <LoginPage />;
+  }
 
   const renderActiveView = () => {
     switch (activeTab) {
       case 'home':
         return <HomeFeed />;
+      case 'hunar':
+        return <HunarView />;
       case 'reels':
         return <ReelsView />;
       case 'create':
@@ -43,6 +74,14 @@ const BharatConnectContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col antialiased selection:bg-orange-500 selection:text-white font-sans">
+      {/* Demo Mode Notice Banner if in demo mode */}
+      {isDemoMode && !user && (
+        <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-1.5 text-center text-xs text-amber-300 flex items-center justify-center gap-2">
+          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+          <span>आप डेमो / अतिथि मोड में हैं। संपूर्ण व्यक्तिगत सुविधाओं के लिए लॉगिन करें।</span>
+        </div>
+      )}
+
       {/* Top Navigation Bar */}
       <Navbar />
 
@@ -75,7 +114,12 @@ const BharatConnectContent: React.FC = () => {
       {/* Mobile-First Sticky Bottom Navigation */}
       <BottomNav />
 
-      {/* Login & Signup Modal */}
+      {/* Instagram-style User Profile Modal */}
+      {viewingUser && (
+        <UserProfileModal user={viewingUser} onClose={() => setViewingUser(null)} />
+      )}
+
+      {/* Login & Signup Modal for switching accounts inside */}
       <AuthModal />
 
       {/* Global Interactive Toast Notification */}
@@ -91,8 +135,10 @@ const BharatConnectContent: React.FC = () => {
 
 export default function App() {
   return (
-    <BharatConnectProvider>
-      <BharatConnectContent />
-    </BharatConnectProvider>
+    <AuthProvider>
+      <BharatConnectProvider>
+        <BharatConnectContent />
+      </BharatConnectProvider>
+    </AuthProvider>
   );
 }

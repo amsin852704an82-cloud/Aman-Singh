@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useBharatConnect } from '../../context/BharatConnectContext';
+import { useAuth } from '../../context/AuthContext';
 import { 
   CheckCircle2, 
   MapPin, 
@@ -12,9 +13,14 @@ import {
   X, 
   User as UserIcon,
   Sparkles,
-  Camera
+  Camera,
+  Flame,
+  ShieldCheck,
+  Mic,
+  Music
 } from 'lucide-react';
 import { Post } from '../../types/bharatConnect';
+import { subscribeToUserFollowers } from '../../lib/followService';
 
 const AVATAR_PRESETS = [
   'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80',
@@ -30,14 +36,17 @@ export const ProfileView: React.FC = () => {
     posts, 
     updateProfile, 
     deletePost, 
-    logout, 
+    logout: contextLogout, 
     setIsAuthModalOpen,
+    firebaseUser,
     t,
     setActiveTab 
   } = useBharatConnect();
+  const { logout: authLogout, user: authUser, exitDemoMode } = useAuth();
 
   const [activeTabSub, setActiveTabSub] = useState<'posts' | 'saved'>('posts');
   const [isEditing, setIsEditing] = useState(false);
+  const [liveFollowersCount, setLiveFollowersCount] = useState<number>(currentUser.followersCount || 0);
 
   // Edit form state
   const [name, setName] = useState(currentUser.fullName);
@@ -47,6 +56,25 @@ export const ProfileView: React.FC = () => {
 
   const myPosts = posts.filter((p) => p.author.id === currentUser.id);
   const savedPosts = posts.filter((p) => p.isSaved);
+
+  // Subscribe to live followers for current user in Firestore
+  useEffect(() => {
+    const currentUid = currentUser.uid || currentUser.id;
+    if (!currentUid) return;
+    const unsub = subscribeToUserFollowers(currentUid, (followerUids) => {
+      if (followerUids.length > 0) {
+        setLiveFollowersCount(followerUids.length);
+      }
+    });
+
+    return () => unsub();
+  }, [currentUser.uid, currentUser.id]);
+
+  useEffect(() => {
+    if (typeof currentUser.followersCount === 'number') {
+      setLiveFollowersCount(currentUser.followersCount);
+    }
+  }, [currentUser.followersCount]);
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,8 +91,8 @@ export const ProfileView: React.FC = () => {
           <div className="relative group">
             <div className="w-24 h-24 rounded-full p-1 bg-gradient-to-tr from-orange-500 via-amber-400 to-emerald-500 shadow-lg">
               <img
-                src={currentUser.avatar}
-                alt={currentUser.fullName}
+                src={currentUser.photoURL || currentUser.avatar}
+                alt={currentUser.name || currentUser.fullName}
                 className="w-full h-full rounded-full object-cover border-2 border-slate-950"
               />
             </div>
@@ -81,7 +109,7 @@ export const ProfileView: React.FC = () => {
           <div className="flex-1 text-center sm:text-left space-y-2">
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
               <h2 className="text-xl font-bold text-white tracking-tight">
-                {currentUser.fullName}
+                {currentUser.name || currentUser.fullName}
               </h2>
               {currentUser.verified && (
                 <CheckCircle2 className="w-4 h-4 text-blue-400 fill-blue-400/20" />
@@ -93,17 +121,27 @@ export const ProfileView: React.FC = () => {
               {currentUser.bio}
             </p>
 
-            <div className="flex items-center justify-center sm:justify-start gap-3 text-xs text-slate-400">
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 text-xs text-slate-400">
               <div className="flex items-center gap-1">
                 <MapPin className="w-3.5 h-3.5 text-orange-400" />
                 <span>{currentUser.location}</span>
               </div>
               <span>·</span>
-              <span className="text-emerald-400 font-medium">सत्यापित भारतीय नागरिक (Verified)</span>
+              {firebaseUser ? (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] font-semibold flex items-center gap-1">
+                    <Flame className="w-3 h-3 text-amber-400 fill-amber-400" />
+                    <span>UID: {firebaseUser.uid.slice(0, 8)}...</span>
+                  </span>
+                  <span className="text-slate-400 text-[11px]">{firebaseUser.email}</span>
+                </div>
+              ) : (
+                <span className="text-emerald-400 font-medium">सत्यापित भारतीय नागरिक (Verified)</span>
+              )}
             </div>
 
             {/* Quick action buttons */}
-            <div className="flex items-center justify-center sm:justify-start gap-2 pt-2">
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-2">
               <button
                 onClick={() => {
                   setName(currentUser.fullName);
@@ -112,7 +150,7 @@ export const ProfileView: React.FC = () => {
                   setAvatar(currentUser.avatar);
                   setIsEditing(true);
                 }}
-                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold flex items-center gap-1.5 border border-slate-700 transition active:scale-95"
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold flex items-center gap-1.5 border border-slate-700 transition active:scale-95"
               >
                 <Edit3 className="w-3.5 h-3.5 text-orange-400" />
                 <span>{t.editProfile}</span>
@@ -120,17 +158,22 @@ export const ProfileView: React.FC = () => {
 
               <button
                 onClick={() => setIsAuthModalOpen(true)}
-                className="px-3 py-2 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/30 text-xs font-medium transition active:scale-95"
+                className="px-3.5 py-2 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/30 text-xs font-semibold transition active:scale-95"
               >
-                खाता बदलें (Login / Switch)
+                {firebaseUser ? 'खाता बदलें (Switch)' : 'Firebase लॉगिन / खाता (Login)'}
               </button>
 
               <button
-                onClick={logout}
-                className="p-2 rounded-xl bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 border border-slate-700 transition active:scale-95"
+                onClick={async () => {
+                  await authLogout();
+                  exitDemoMode();
+                  contextLogout();
+                }}
+                className="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-semibold flex items-center gap-1.5 transition active:scale-95"
                 title={t.logout}
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-3.5 h-3.5 text-rose-400" />
+                <span>लॉग आउट (Log Out)</span>
               </button>
             </div>
           </div>
@@ -143,7 +186,7 @@ export const ProfileView: React.FC = () => {
             <div className="text-[11px] text-slate-400">{t.posts}</div>
           </div>
           <div>
-            <div className="text-lg font-black text-white">{currentUser.followersCount}</div>
+            <div className="text-lg font-black text-white">{liveFollowersCount}</div>
             <div className="text-[11px] text-slate-400">{t.followers}</div>
           </div>
           <div>
@@ -201,11 +244,42 @@ export const ProfileView: React.FC = () => {
                 key={post.id}
                 className="group relative aspect-square rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 shadow-sm"
               >
-                <img
-                  src={post.imageUrl}
-                  alt={post.caption}
-                  className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
-                />
+                {post.imageUrl ? (
+                  <img
+                    src={post.imageUrl}
+                    alt={post.caption || 'Post image'}
+                    className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
+                  />
+                ) : post.mediaType === 'audio' || Boolean(post.audioURL) ? (
+                  <div className="w-full h-full p-3.5 bg-gradient-to-br from-purple-950/70 via-slate-900 to-orange-950/70 flex flex-col justify-between select-none">
+                    <div className="flex items-center justify-between">
+                      <span className="p-1 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                        <Mic className="w-3.5 h-3.5" />
+                      </span>
+                      <span className="text-[10px] text-orange-400 font-mono">🎙️ आवाज़</span>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-bold text-white line-clamp-2">
+                        {post.audioTitle || post.caption || 'ऑडियो शायरी'}
+                      </p>
+                      <div className="flex items-center gap-0.5 h-3">
+                        {[40, 75, 55, 90, 60, 80, 45, 95].map((h, i) => (
+                          <div 
+                            key={i} 
+                            style={{ height: `${h}%` }} 
+                            className="w-1 bg-purple-400/80 rounded-full" 
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="w-full h-full p-3 bg-gradient-to-br from-orange-950/30 to-slate-900 flex items-center justify-center text-center p-3">
+                    <p className="text-xs text-slate-200 line-clamp-4 italic">
+                      "{post.text || post.caption}"
+                    </p>
+                  </div>
+                )}
                 
                 {/* Overlay with stats & delete */}
                 <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-3 text-white">
@@ -249,11 +323,22 @@ export const ProfileView: React.FC = () => {
                 key={post.id}
                 className="relative aspect-square rounded-2xl overflow-hidden bg-slate-900 border border-slate-800"
               >
-                <img
-                  src={post.imageUrl}
-                  alt={post.caption}
-                  className="w-full h-full object-cover"
-                />
+                {post.imageUrl ? (
+                  <img
+                    src={post.imageUrl}
+                    alt={post.caption || 'Saved post'}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full p-3 bg-gradient-to-br from-purple-950/50 to-slate-900 flex flex-col justify-between">
+                    <span className="text-[10px] text-purple-300 font-bold flex items-center gap-1">
+                      <Mic className="w-3 h-3" /> आवाज़
+                    </span>
+                    <p className="text-xs text-slate-200 line-clamp-3">
+                      {post.caption || post.text}
+                    </p>
+                  </div>
+                )}
                 <div className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-sm px-2 py-0.5 rounded-lg text-[10px] text-white">
                   @{post.author.username}
                 </div>

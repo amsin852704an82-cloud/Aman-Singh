@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useBharatConnect } from '../../context/BharatConnectContext';
+import { uploadPostImage } from '../../lib/postService';
 import { 
   Camera, 
   Upload, 
@@ -13,8 +14,14 @@ import {
   Image as ImageIcon,
   Trash2,
   Smile,
-  CheckCircle2
+  CheckCircle2,
+  Lock,
+  Link2,
+  FolderOpen,
+  ArrowRight,
+  Mic
 } from 'lucide-react';
+import { AwaazRecordModal } from './AwaazRecordModal';
 
 const PRESET_IMAGES = [
   {
@@ -74,71 +81,90 @@ const SUGGESTED_TAGS = [
 const QUICK_EMOJIS = ['🇮🇳', '✨', '🙏', '🪔', '❤️', '🌸', '🚀', '📸'];
 
 export const CreatePostView: React.FC = () => {
-  const { currentUser, createPost, t, setActiveTab } = useBharatConnect();
-
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const { 
+    currentUser, 
+    createPost, 
+    t, 
+    setActiveTab, 
+    isFirebaseAuthLoggedIn, 
+    setIsAuthModalOpen 
+  } = useBharatConnect();
 
   const [caption, setCaption] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [imageFileName, setImageFileName] = useState<string | null>(null);
   const [imageFileSize, setImageFileSize] = useState<string | null>(null);
   const [isPhoneUpload, setIsPhoneUpload] = useState(false);
   const [location, setLocation] = useState(currentUser.location || 'New Delhi, India');
   const [selectedTags, setSelectedTags] = useState<string[]>(['BharatConnect', 'DesiVibes']);
+  const [customUrlInput, setCustomUrlInput] = useState('');
   
-  // Loading & Error States
-  const [isReadingFile, setIsReadingFile] = useState(false);
+  // File inputs ref
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  // Loading & Progress & Error States
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isPublishing, setIsPublishing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
+  const [isAwaazOpen, setIsAwaazOpen] = useState(false);
 
-  // Handle image selected from Android phone (gallery or camera)
+  // Handle file selection from Gallery or Camera
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setErrorMessage(null);
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validation: Image type
     if (!file.type.startsWith('image/')) {
-      setErrorMessage('कृपया केवल वैध फोटो (.jpg, .jpeg, .png, .webp) चुनें।');
+      setErrorMessage('कृपया केवल फोटो/इमेज फाइल (JPG, PNG, WebP) चुनें।');
       return;
     }
 
-    // Validation: Size (Max 20MB)
-    if (file.size > 20 * 1024 * 1024) {
-      setErrorMessage('फ़ोटो का आकार 20MB से कम होना चाहिए।');
+    if (file.size > 10 * 1024 * 1024) {
+      setErrorMessage('फोटो का आकार 10MB से अधिक नहीं होना चाहिए।');
       return;
     }
 
-    setIsReadingFile(true);
-    const readableSize = (file.size / (1024 * 1024)).toFixed(2) + ' MB';
+    setErrorMessage(null);
+    setSelectedFile(file);
+    const objectUrl = URL.createObjectURL(file);
+    setSelectedImage(objectUrl);
     setImageFileName(file.name);
-    setImageFileSize(readableSize);
+    setImageFileSize(`${(file.size / (1024 * 1024)).toFixed(2)} MB`);
+    setIsPhoneUpload(true);
+  };
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      setSelectedImage(event.target?.result as string);
-      setIsPhoneUpload(true);
-      setIsReadingFile(false);
-    };
-
-    reader.onerror = () => {
-      setIsReadingFile(false);
-      setErrorMessage('फ़ोन से फ़ोटो पढ़ने में समस्या आई। कृपया पुनः प्रयास करें।');
-    };
-
-    reader.readAsDataURL(file);
-    // Reset file input so user can pick again if needed
-    e.target.value = '';
+  const handleApplyCustomUrl = () => {
+    setErrorMessage(null);
+    const url = customUrlInput.trim();
+    if (!url) return;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      setErrorMessage('कृपया मान्य वेब फ़ोटो URL (https://...) दर्ज करें।');
+      return;
+    }
+    setSelectedFile(null);
+    setSelectedImage(url);
+    setImageFileName('वेब फ़ोटो URL');
+    setImageFileSize('वेब लिंक');
+    setIsPhoneUpload(false);
+    setCustomUrlInput('');
   };
 
   const handleRemoveImage = () => {
+    if (selectedImage && selectedImage.startsWith('blob:')) {
+      URL.revokeObjectURL(selectedImage);
+    }
+    setSelectedFile(null);
     setSelectedImage(null);
     setImageFileName(null);
     setImageFileSize(null);
     setIsPhoneUpload(false);
     setErrorMessage(null);
+    setUploadProgress(0);
+    if (galleryInputRef.current) galleryInputRef.current.value = '';
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
   };
 
   const toggleTag = (tag: string) => {
@@ -155,46 +181,112 @@ export const CreatePostView: React.FC = () => {
 
   const handleSelectPreset = (preset: typeof PRESET_IMAGES[0]) => {
     setErrorMessage(null);
+    if (selectedImage && selectedImage.startsWith('blob:')) {
+      URL.revokeObjectURL(selectedImage);
+    }
+    setSelectedFile(null);
     setSelectedImage(preset.url);
     setImageFileName(preset.name);
-    setImageFileSize('वेब फोटो');
+    setImageFileSize('सैम्पल फोटो');
     setIsPhoneUpload(false);
     if (!selectedTags.includes(preset.tag)) {
       setSelectedTags((prev) => [...prev, preset.tag]);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Immediate fallback: Publish caption without photo if Storage bucket is uninitialized
+  const handlePublishWithoutPhoto = async () => {
+    if (!caption.trim()) {
+      setErrorMessage('कृपया पोस्ट करने के लिए कुछ टेक्स्ट लिखें।');
+      return;
+    }
+    setErrorMessage(null);
+    setIsPublishing(true);
+    try {
+      await createPost(caption, '', location, selectedTags);
+      setIsPublishing(false);
+      setSuccessNotice('आपकी टेक्स्ट पोस्ट Firestore में प्रकाशित हो गई!');
+    } catch (err: any) {
+      setIsPublishing(false);
+      setErrorMessage(err?.message || 'पोस्ट प्रकाशित करने में त्रुटि हुई।');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
-    // Validation: Must have caption or image
-    if (!selectedImage && !caption.trim()) {
-      setErrorMessage('कृपया पोस्ट करने के लिए फ़ोटो चुनें या कैप्शन लिखें।');
+    // Rule 8: Only logged-in users can create posts
+    if (!isFirebaseAuthLoggedIn) {
+      setErrorMessage('केवल लॉगिन किए हुए यूज़र ही पोस्ट बना सकते हैं। कृपया पहले लॉगिन करें।');
+      setIsAuthModalOpen(true);
+      return;
+    }
+
+    // Must have at least caption or image
+    if (!caption.trim() && !selectedImage && !selectedFile) {
+      setErrorMessage('कृपया पोस्ट करने के लिए कुछ टेक्स्ट लिखें या फ़ोटो चुनें।');
       return;
     }
 
     setIsPublishing(true);
+    let finalImageUrl = '';
 
-    // Realistic brief network delay for Android feedback
-    setTimeout(() => {
-      try {
-        const finalImage = selectedImage || 'https://images.unsplash.com/photo-1561361513-2d000a50f0dc?w=800&auto=format&fit=crop&q=80';
-        createPost(caption, finalImage, location, selectedTags);
-        setIsPublishing(false);
-        setSuccessNotice('आपकी पोस्ट सफलतापूर्वक होम फ़ीड में प्रकाशित हो गई!');
-        
-        // Context createPost already switches tab to 'home' and shows toast
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      } catch (err) {
-        setIsPublishing(false);
-        setErrorMessage('पोस्ट प्रकाशित करते समय त्रुटि हुई। कृपया पुनः प्रयास करें।');
+    try {
+      // 1. If user selected a local file from Gallery or Camera, upload to Firebase Storage
+      if (selectedFile) {
+        setIsUploading(true);
+        setUploadProgress(5);
+        try {
+          finalImageUrl = await uploadPostImage(selectedFile, (progress) => {
+            setUploadProgress(progress);
+          });
+        } catch (uploadErr: any) {
+          setIsUploading(false);
+          setIsPublishing(false);
+          setErrorMessage(uploadErr?.message || 'फोटो अपलोड विफल रहा।');
+          return;
+        }
+        setIsUploading(false);
+      } else if (selectedImage && !selectedImage.startsWith('blob:')) {
+        // Direct preset or web URL
+        finalImageUrl = selectedImage;
       }
-    }, 600);
+
+      // 2. Save post document to Firestore
+      await createPost(caption, finalImageUrl, location, selectedTags);
+      setCaption('');
+      handleRemoveImage();
+      setIsPublishing(false);
+      setSuccessNotice('आपकी पोस्ट सफलतापूर्वक Firestore में प्रकाशित हो गई!');
+      setActiveTab('home');
+    } catch (err: any) {
+      setIsPublishing(false);
+      setIsUploading(false);
+      const msg = err?.message || 'पोस्ट प्रकाशित करते समय त्रुटि हुई। कृपया पुनः प्रयास करें।';
+      setErrorMessage(msg);
+    }
   };
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-4 pb-28">
+      {/* Hidden File Inputs for Gallery and Camera */}
+      <input
+        ref={galleryInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileChange}
+        className="hidden"
+      />
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleFileChange}
+        className="hidden"
+      />
+
       {/* Header */}
       <div className="flex items-center justify-between mb-5 pb-3 border-b border-slate-800">
         <div className="flex items-center gap-2.5">
@@ -206,7 +298,7 @@ export const CreatePostView: React.FC = () => {
               {t.createNewPost} (Create Post)
             </h1>
             <p className="text-[11px] text-slate-400">
-              Android फोन से फोटो चुनें, कैप्शन लिखें और पूरे भारत में साझा करें
+              गैलरी से फोटो चुनें, कैमरा से लें या सीधे टेक्स्ट पोस्ट करें
             </p>
           </div>
         </div>
@@ -220,17 +312,80 @@ export const CreatePostView: React.FC = () => {
         </button>
       </div>
 
-      {/* Error Message Alert */}
-      {errorMessage && (
-        <div className="mb-4 p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/40 text-rose-200 text-xs flex items-center gap-2.5 animate-shake">
-          <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-          <span className="font-medium">{errorMessage}</span>
-          <button 
-            onClick={() => setErrorMessage(null)} 
-            className="ml-auto text-rose-400 hover:text-rose-200 text-sm font-bold"
+      {/* Switch to Awaaz Audio / Shayari Post Banner */}
+      <div className="mb-4 p-3.5 rounded-2xl bg-gradient-to-r from-purple-950/50 via-slate-900 to-orange-950/40 border border-purple-500/30 flex items-center justify-between gap-3 shadow-md">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-purple-500/20 text-purple-400 border border-purple-500/30 flex items-center justify-center shrink-0">
+            <Mic className="w-4 h-4" />
+          </div>
+          <div>
+            <p className="text-xs font-bold text-white">आवाज़ (Awaaz) - ऑडियो व शायरी पोस्ट</p>
+            <p className="text-[11px] text-slate-400">अपनी आवाज़ में शायरी, कविता या विचार रिकॉर्ड करें</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsAwaazOpen(true)}
+          className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 to-orange-500 hover:from-purple-500 hover:to-orange-400 text-white text-xs font-bold shadow-md transition active:scale-95 shrink-0 cursor-pointer"
+        >
+          🎙️ रिकॉर्डर खोलें
+        </button>
+      </div>
+
+      {/* Auth Login Required Warning */}
+      {!isFirebaseAuthLoggedIn && (
+        <div className="mb-4 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/40 text-amber-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+          <div className="flex items-center gap-2.5">
+            <AlertCircle className="w-5 h-5 text-amber-400 shrink-0" />
+            <div>
+              <p className="font-bold text-amber-300">लॉगिन आवश्यक है (Firebase Login Required)</p>
+              <p className="text-[11px] text-amber-200/80">
+                Firestore डेटाबेस में असली पोस्ट बनाने के लिए कृपया अपने खाते से लॉगिन करें।
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsAuthModalOpen(true)}
+            className="px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs shadow-md transition active:scale-95 shrink-0"
           >
-            ×
+            लॉगिन / साइन-अप करें
           </button>
+        </div>
+      )}
+
+      {/* Error Message Alert with Instant Fallback */}
+      {errorMessage && (
+        <div className="mb-4 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/40 text-rose-200 text-xs space-y-2 animate-shake">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="font-bold text-rose-300">त्रुटि (Error):</p>
+              <p className="text-[11px] leading-relaxed text-rose-200/90">{errorMessage}</p>
+            </div>
+            <button 
+              onClick={() => setErrorMessage(null)} 
+              className="text-rose-400 hover:text-rose-200 text-sm font-bold p-1"
+            >
+              ×
+            </button>
+          </div>
+
+          {/* Quick fallback button if text exists */}
+          {caption.trim() && (
+            <div className="pt-2 border-t border-rose-500/20 flex flex-wrap items-center gap-2">
+              <span className="text-[10px] text-rose-300">त्वरित समाधान:</span>
+              <button
+                type="button"
+                onClick={handlePublishWithoutPhoto}
+                disabled={isPublishing}
+                className="px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-semibold text-[11px] transition flex items-center gap-1 shadow-sm active:scale-95"
+              >
+                <span>केवल टेक्स्ट पोस्ट के रूप में अभी प्रकाशित करें</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -246,13 +401,13 @@ export const CreatePostView: React.FC = () => {
         {/* Creator Info Card */}
         <div className="flex items-center gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-800/80">
           <img
-            src={currentUser.avatar}
-            alt={currentUser.fullName}
+            src={currentUser.photoURL || currentUser.avatar}
+            alt={currentUser.name || currentUser.fullName}
             className="w-10 h-10 rounded-full object-cover border border-orange-500/50"
           />
           <div className="flex-1 min-w-0">
             <div className="text-xs font-bold text-white flex items-center gap-1.5">
-              <span>{currentUser.fullName}</span>
+              <span>{currentUser.name || currentUser.fullName}</span>
               {currentUser.verified && (
                 <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 fill-blue-400/20" />
               )}
@@ -266,12 +421,12 @@ export const CreatePostView: React.FC = () => {
           </span>
         </div>
 
-        {/* 1. Android Photo Upload / Preview Zone */}
+        {/* 1. Photo Selection Zone (Gallery & Camera) */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <label className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
               <ImageIcon className="w-4 h-4 text-orange-400" />
-              <span>फ़ोटो पूर्वावलोकन (Photo Preview)</span>
+              <span>फ़ोटो जोड़ें (Photo Upload / Camera)</span>
             </label>
             {selectedImage && (
               <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
@@ -281,16 +436,8 @@ export const CreatePostView: React.FC = () => {
             )}
           </div>
 
-          {/* Reading File Spinner */}
-          {isReadingFile && (
-            <div className="aspect-video w-full rounded-2xl bg-slate-900/80 border border-slate-800 flex flex-col items-center justify-center gap-2 text-slate-300">
-              <Loader2 className="w-7 h-7 text-orange-400 animate-spin" />
-              <span className="text-xs font-medium">फ़ोन से फ़ोटो लोड हो रही है...</span>
-            </div>
-          )}
-
           {/* Active Image Preview Box */}
-          {!isReadingFile && selectedImage ? (
+          {selectedImage ? (
             <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 shadow-md group">
               <img
                 src={selectedImage}
@@ -298,97 +445,116 @@ export const CreatePostView: React.FC = () => {
                 className="w-full h-full object-cover transition duration-300"
               />
 
+              {/* Upload Progress Overlay */}
+              {isUploading && (
+                <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center gap-3 p-4 text-white z-10 backdrop-blur-xs">
+                  <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
+                  <div className="w-48 bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700">
+                    <div 
+                      className="bg-gradient-to-r from-orange-500 to-amber-400 h-full transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-bold tracking-wide">
+                    Firebase Storage पर अपलोड हो रही है... {uploadProgress}%
+                  </span>
+                </div>
+              )}
+
               {/* Bottom bar with file details and action buttons */}
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-3 flex items-center justify-between">
-                <div className="text-[11px] text-slate-200 truncate max-w-[200px]">
-                  <span className="font-semibold block truncate">{imageFileName || 'Image'}</span>
-                  <span className="text-[10px] text-slate-400">{imageFileSize}</span>
-                </div>
+              {!isUploading && (
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-3 flex items-center justify-between">
+                  <div className="text-[11px] text-slate-200 truncate max-w-[200px]">
+                    <span className="font-semibold block truncate">{imageFileName || 'Image'}</span>
+                    <span className="text-[10px] text-slate-400">{imageFileSize}</span>
+                  </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="px-2.5 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-white text-[11px] font-semibold flex items-center gap-1.5 transition active:scale-95"
-                  >
-                    <Upload className="w-3.5 h-3.5 text-orange-400" />
-                    <span>बदलें (Change)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleRemoveImage}
-                    className="p-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 transition active:scale-95"
-                    title="हटाएं (Remove)"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleRemoveImage}
+                      className="px-2.5 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-[11px] font-semibold flex items-center gap-1.5 transition active:scale-95"
+                      title="फ़ोटो हटाएं"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>फ़ोटो हटाएं (Remove)</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
-          ) : !isReadingFile ? (
-            /* Upload Dropzone / Touch Target */
-            <div className="rounded-2xl border-2 border-dashed border-slate-800 hover:border-orange-500/50 bg-slate-900/40 p-5 text-center transition space-y-3">
-              <div className="w-12 h-12 rounded-2xl bg-orange-500/10 border border-orange-500/20 text-orange-400 mx-auto flex items-center justify-center">
-                <Upload className="w-6 h-6" />
+          ) : (
+            /* Upload Dropzone with Active Mobile Gallery & Camera Buttons */
+            <div className="rounded-2xl border-2 border-dashed border-slate-800 bg-slate-900/40 p-5 text-center space-y-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-orange-500/10 border border-orange-500/20 text-orange-400 mx-auto flex items-center justify-center shadow-inner">
+                <Camera className="w-6 h-6" />
               </div>
 
               <div>
                 <h3 className="text-xs font-bold text-white">
-                  अपने Android फ़ोन से फ़ोटो चुनें
+                  फ़ोन गैलरी से फ़ोटो चुनें या कैमरा से फ़ोटो खींचें
                 </h3>
-                <p className="text-[11px] text-slate-400 mt-0.5">
-                  गैलरी से चुनें या तुरंत कैमरे से फोटो लें
+                <p className="text-[11px] text-slate-400 mt-1 max-w-md mx-auto">
+                  फ़ोटो Firebase Storage पर अपलोड होगी और उसका लिंक Firestore में सुरक्षित सेव होगा।
                 </p>
               </div>
 
-              {/* Mobile Action Buttons */}
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-1">
+              {/* Active Mobile Gallery and Camera Action Buttons */}
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-1">
                 <button
                   type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md shadow-orange-500/20 active:scale-95 transition"
+                  onClick={() => galleryInputRef.current?.click()}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:opacity-95 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md shadow-orange-500/20 active:scale-95 transition cursor-pointer"
                 >
-                  <Upload className="w-4 h-4" />
-                  <span>गैलरी से फ़ोटो चुनें (Choose from Gallery)</span>
+                  <FolderOpen className="w-4 h-4" />
+                  <span>गैलरी से फ़ोटो चुनें (Gallery)</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => cameraInputRef.current?.click()}
-                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center justify-center gap-2 border border-slate-700 active:scale-95 transition"
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700/80 text-white text-xs font-semibold flex items-center justify-center gap-2 border border-slate-700 active:scale-95 transition cursor-pointer"
                 >
                   <Camera className="w-4 h-4 text-orange-400" />
                   <span>कैमरा खोलें (Take Photo)</span>
                 </button>
               </div>
-            </div>
-          ) : null}
 
-          {/* Hidden File Inputs */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleFileChange}
-            className="hidden"
-          />
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={handleFileChange}
-            className="hidden"
-          />
+              {/* Optional Web Photo URL Input */}
+              <div className="pt-2 border-t border-slate-800/80 text-left">
+                <label className="text-[11px] font-semibold text-slate-300 block mb-1.5">
+                  या वेब फ़ोटो लिंक (Direct Image URL) डालें:
+                </label>
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="url"
+                      value={customUrlInput}
+                      onChange={(e) => setCustomUrlInput(e.target.value)}
+                      placeholder="https://images.unsplash.com/photo-..."
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-orange-500"
+                    />
+                    <Link2 className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleApplyCustomUrl}
+                    className="px-3.5 py-2 rounded-xl bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 border border-orange-500/30 text-xs font-bold transition active:scale-95 shrink-0"
+                  >
+                    लिंक जोड़ें
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* 1-Click Indian Sample Presets (Ideal for mobile ₹0 testing without large data) */}
+        {/* 1-Click Indian Sample Presets (For instant testing) */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>या 1-क्लिक टेस्ट फ़ोटो चुनें (Sample Indian Photos):</span>
+              <span>त्वरित 1-क्लिक सैम्पल फ़ोटो (Sample Indian Photos):</span>
             </span>
           </div>
 
@@ -517,21 +683,31 @@ export const CreatePostView: React.FC = () => {
           </div>
         </div>
 
-        {/* 5. Publish Submit Button with Loading State */}
+        {/* 5. Publish Submit Button with Loading & Progress State */}
         <div className="pt-2">
           <button
             type="submit"
-            disabled={isPublishing || isReadingFile}
+            disabled={isPublishing || isUploading}
             className={`w-full py-3.5 rounded-2xl font-bold text-sm tracking-wide shadow-lg transition flex items-center justify-center gap-2 active:scale-[0.99] ${
-              isPublishing || isReadingFile
+              isPublishing || isUploading
                 ? 'bg-slate-800 text-slate-400 cursor-not-allowed border border-slate-700'
-                : 'bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white shadow-orange-500/20 hover:opacity-95'
+                : 'bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 text-white shadow-orange-500/20 hover:opacity-95 cursor-pointer'
             }`}
           >
-            {isPublishing ? (
+            {isUploading ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin text-white" />
-                <span>पोस्ट प्रकाशित हो रही है... (Publishing...)</span>
+                <span>फ़ोटो अपलोड हो रही है... ({uploadProgress}%)</span>
+              </>
+            ) : isPublishing ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin text-white" />
+                <span>Firestore में पोस्ट सेव हो रही है...</span>
+              </>
+            ) : !isFirebaseAuthLoggedIn ? (
+              <>
+                <AlertCircle className="w-4 h-4 text-amber-300" />
+                <span>पोस्ट करने के लिए पहले लॉगिन करें (Login to Publish)</span>
               </>
             ) : (
               <>
@@ -542,6 +718,12 @@ export const CreatePostView: React.FC = () => {
           </button>
         </div>
       </form>
+
+      {/* Awaaz Live Audio Recorder / Shayari Modal */}
+      <AwaazRecordModal
+        isOpen={isAwaazOpen}
+        onClose={() => setIsAwaazOpen(false)}
+      />
     </div>
   );
 };

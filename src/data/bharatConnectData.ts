@@ -226,6 +226,60 @@ export const INITIAL_POSTS: Post[] = [
         likesCount: 31
       }
     ]
+  },
+  {
+    id: 'post_04_awaaz',
+    author: INITIAL_USERS[3], // Ananya Sundaram
+    caption: 'हज़ारों ख़्वाहिशें ऐसी कि हर ख़्वाहिश पे दम निकले\nबहुत निकले मिरे अरमाँ लेकिन फिर भी कम निकले... 🎙️✨\n\nमिर्ज़ा ग़ालिब की अमर रचना, मेरी आवाज़ में। सुनिए और आनंद लीजिए।',
+    audioURL: 'https://actions.google.com/sounds/v1/ambiences/daytime_forest_bonanza.ogg',
+    audioDuration: 42,
+    audioTitle: 'मिर्ज़ा ग़ालिब - हज़ारों ख़्वाहिशें ऐसी',
+    mediaType: 'audio',
+    likesCount: 1840,
+    commentsCount: 68,
+    sharesCount: 142,
+    isLiked: false,
+    isSaved: true,
+    locationName: 'Chennai, Tamil Nadu',
+    createdAt: '3 hours ago',
+    language: 'hi',
+    tags: ['Awaaz', 'Shayari', 'Ghalib', 'Kavita', 'IndianPoetry'],
+    comments: [
+      {
+        id: 'c_05',
+        author: INITIAL_USERS[0],
+        text: 'वाह! आपकी आवाज़ में ग़ालिब साहब की शायरी बहुत पुरअसर लगी। 👏',
+        createdAt: '2h ago',
+        likesCount: 15
+      }
+    ]
+  },
+  {
+    id: 'post_05_awaaz',
+    author: INITIAL_USERS[0], // Aarav Sharma
+    caption: 'गुरु गोविंद दोऊ खड़े, काके लागूं पांय।\nबलिहारी गुरु आपने, गोविंद दियो बताय॥ 🙏\n\nसंत कबीर का यह अनमोल दोहा हमारे जीवन की दिशा तय करता है।',
+    audioURL: 'https://actions.google.com/sounds/v1/water/creek_water_lapping.ogg',
+    audioDuration: 30,
+    audioTitle: 'संत कबीर - अमर साखी व दोहा',
+    mediaType: 'audio',
+    likesCount: 3290,
+    commentsCount: 114,
+    sharesCount: 280,
+    isLiked: true,
+    isSaved: false,
+    locationName: 'Bengaluru, Karnataka',
+    createdAt: '6 hours ago',
+    language: 'hi',
+    tags: ['Awaaz', 'KabirDoha', 'Bhakti', 'SpiritualIndia'],
+    comments: [
+      {
+        id: 'c_06',
+        author: INITIAL_USERS[2],
+        text: 'कबीर के विचार आज भी उतने ही प्रासंगिक हैं। बहुत सुंदर प्रस्तुति!',
+        createdAt: '4h ago',
+        likesCount: 22
+      }
+    ]
   }
 ];
 
@@ -270,31 +324,61 @@ export const INITIAL_REELS: Reel[] = [
 
 export const INITIAL_NOTIFICATIONS: AppNotification[] = [
   {
+    notificationId: 'notif_01',
     id: 'notif_01',
+    recipientUid: 'u_user',
+    senderUid: INITIAL_USERS[1].id,
+    senderName: INITIAL_USERS[1].fullName,
+    senderPhotoURL: INITIAL_USERS[1].avatar,
     type: 'like',
+    postId: 'post_01',
+    message: 'ने आपकी पोस्ट को लाइक किया',
+    createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
     actor: INITIAL_USERS[1],
     postPreview: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=100&auto=format&fit=crop&q=80',
     timeAgo: '15m ago',
     isRead: false
   },
   {
+    notificationId: 'notif_02',
     id: 'notif_02',
+    recipientUid: 'u_user',
+    senderUid: INITIAL_USERS[0].id,
+    senderName: INITIAL_USERS[0].fullName,
+    senderPhotoURL: INITIAL_USERS[0].avatar,
     type: 'comment',
+    postId: 'post_01',
+    message: 'ने आपकी पोस्ट पर टिप्पणी की',
+    createdAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
     actor: INITIAL_USERS[0],
     postPreview: 'https://images.unsplash.com/photo-1561361513-2d000a50f0dc?w=100&auto=format&fit=crop&q=80',
     timeAgo: '1h ago',
     isRead: false
   },
   {
+    notificationId: 'notif_03',
     id: 'notif_03',
+    recipientUid: 'u_user',
+    senderUid: INITIAL_USERS[3].id,
+    senderName: INITIAL_USERS[3].fullName,
+    senderPhotoURL: INITIAL_USERS[3].avatar,
     type: 'follow',
+    message: 'ने आपको फ़ॉलो करना शुरू किया',
+    createdAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
     actor: INITIAL_USERS[3],
     timeAgo: '3h ago',
     isRead: true
   },
   {
+    notificationId: 'notif_04',
     id: 'notif_04',
+    recipientUid: 'u_user',
+    senderUid: INITIAL_USERS[2].id,
+    senderName: INITIAL_USERS[2].fullName,
+    senderPhotoURL: INITIAL_USERS[2].avatar,
     type: 'mention',
+    message: 'ने आपको मेंशन किया',
+    createdAt: new Date(Date.now() - 24 * 3600 * 1000).toISOString(),
     actor: INITIAL_USERS[2],
     timeAgo: '1d ago',
     isRead: true

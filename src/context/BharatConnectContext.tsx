@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { 
   User, 
   Post, 
+  PostComment,
   Story, 
   Reel, 
   AppNotification, 
@@ -19,6 +20,41 @@ import {
   CURRENT_USER 
 } from '../data/bharatConnectData';
 import { TRANSLATIONS, Translations } from '../data/translations';
+import { 
+  auth, 
+  db, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged, 
+  updateFirebaseAuthProfile,
+  doc, 
+  getDoc, 
+  setDoc, 
+  updateDoc, 
+  FirebaseUser 
+} from '../lib/firebase';
+import { saveOrUpdateUserProfile } from '../lib/userProfileService';
+import { 
+  createFirestorePost, 
+  subscribeToFirestorePosts, 
+  deleteFirestorePost, 
+  updateFirestorePostCaption,
+  toggleLikeFirestorePost,
+  addFirestoreComment
+} from '../lib/postService';
+import { 
+  followUserInFirestore, 
+  unfollowUserInFirestore, 
+  subscribeToUserFollowings 
+} from '../lib/followService';
+import { 
+  subscribeToUserNotifications, 
+  markNotificationAsRead, 
+  markNotificationAsUnread, 
+  markAllNotificationsAsRead, 
+  deleteFirestoreNotification 
+} from '../lib/notificationService';
 
 interface BharatConnectContextType {
   language: LanguageCode;
@@ -41,13 +77,42 @@ interface BharatConnectContextType {
   toastMessage: string | null;
   setToastMessage: (msg: string | null) => void;
   
-  // Actions
+  // Firebase Auth State
+  firebaseUser: FirebaseUser | null;
+  isFirebaseAuthLoggedIn: boolean;
+  isAuthLoading: boolean;
+  signUpWithFirebase: (email: string, pass: string, fullName: string, username: string) => Promise<{ success: boolean; error?: string }>;
+  loginWithFirebase: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  logoutWithFirebase: () => Promise<void>;
+
+  // Notifications System State & Actions
+  unreadNotificationsCount: number;
+  isNotificationsLoading: boolean;
+  markNotificationRead: (notificationId: string) => Promise<void>;
+  markNotificationUnread: (notificationId: string) => Promise<void>;
+  markAllNotificationsRead: () => Promise<void>;
+  deleteNotificationItem: (notificationId: string) => Promise<void>;
+
+  // Instagram Follow System State & Actions
+  followingIds: string[];
+  viewingUser: User | null;
+  setViewingUser: (user: User | null) => void;
+  openUserProfile: (user: User) => void;
+  toggleFollowUser: (target: string | User) => Promise<void>;
+
+  // Other Actions
   toggleLikePost: (postId: string) => void;
   toggleSavePost: (postId: string) => void;
   addComment: (postId: string, text: string) => void;
-  toggleFollowUser: (userId: string) => void;
-  createPost: (caption: string, imageUrl: string, locationName: string, tags: string[]) => void;
+  createPost: (
+    caption: string, 
+    imageUrl: string, 
+    locationName: string, 
+    tags: string[], 
+    audioOptions?: { audioURL: string; audioDuration?: number | string; audioTitle?: string }
+  ) => Promise<boolean>;
   deletePost: (postId: string) => void;
+  updatePostCaption: (postId: string, newCaption: string) => Promise<boolean>;
   toggleLikeReel: (reelId: string) => void;
   reportContent: (reportedUserId: string, reason: string, details?: string, postId?: string) => void;
   blockUser: (userId: string) => void;
@@ -71,9 +136,21 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
   const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
   const [reports, setReports] = useState<ReportTicket[]>(INITIAL_REPORTS);
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
-  const [isPhoneFrame, setIsPhoneFrame] = useState(false); // Fluid by default, can toggle mobile frame
+  const [isPhoneFrame, setIsPhoneFrame] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Firebase auth state
+  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+
+  // Instagram-style Following & User Profile State
+  const [followingIds, setFollowingIds] = useState<string[]>([]);
+  const [viewingUser, setViewingUser] = useState<User | null>(null);
+
+  const openUserProfile = (u: User) => {
+    setViewingUser(u);
+  };
 
   const t = TRANSLATIONS[language] || TRANSLATIONS.hi;
 
@@ -81,23 +158,299 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage((curr) => (curr === msg ? null : curr));
-    }, 4000);
+    }, 4500);
   };
 
-  const toggleLikePost = (postId: string) => {
+  // Sync Firebase Auth state
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setFirebaseUser(user);
+      setIsAuthLoading(false);
+
+      if (user) {
+        try {
+          const profile = await saveOrUpdateUserProfile(user);
+          setCurrentUser(profile);
+          setUsers((prev) => {
+            const exists = prev.some((u) => u.id === profile.id);
+            return exists ? prev.map((u) => (u.id === profile.id ? profile : u)) : [profile, ...prev];
+          });
+        } catch (err: any) {
+          console.error('Error syncing profile in BharatConnectContext:', err);
+          const rawMsg = err instanceof Error ? err.message : String(err);
+          showToast(`डेटाबेस त्रुटि: ${rawMsg}`);
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Real-time Firestore posts subscription
+  useEffect(() => {
+    const unsubscribePosts = subscribeToFirestorePosts(
+      (firestorePosts) => {
+        if (firestorePosts && firestorePosts.length > 0) {
+          setPosts(firestorePosts);
+        } else {
+          // If Firestore is empty initially, display initial posts as starting content
+          setPosts(INITIAL_POSTS);
+        }
+      },
+      (error) => {
+        console.warn('Firestore posts subscription note:', error);
+      }
+    );
+
+    return () => unsubscribePosts();
+  }, []);
+
+  // Real-time Firestore followings subscription (persists follow state across page refresh)
+  useEffect(() => {
+    if (!firebaseUser) {
+      setFollowingIds([]);
+      return;
+    }
+
+    const unsubscribeFollows = subscribeToUserFollowings(
+      firebaseUser.uid,
+      (uids) => {
+        setFollowingIds(uids);
+        setCurrentUser((prev) => ({
+          ...prev,
+          followingCount: uids.length
+        }));
+      },
+      (error) => {
+        console.warn('Firestore followings subscription note:', error);
+      }
+    );
+
+    return () => unsubscribeFollows();
+  }, [firebaseUser]);
+
+  // Notifications loading state
+  const [isNotificationsLoading, setIsNotificationsLoading] = useState(false);
+
+  // Real-time Firestore notifications subscription for recipientUid == firebaseUser.uid
+  // Listener cleanup is guaranteed on unmount or when firebaseUser changes
+  useEffect(() => {
+    if (!firebaseUser) {
+      setNotifications(INITIAL_NOTIFICATIONS);
+      setIsNotificationsLoading(false);
+      return;
+    }
+
+    setIsNotificationsLoading(true);
+    const unsubscribeNotifs = subscribeToUserNotifications(
+      firebaseUser.uid,
+      (firestoreNotifs) => {
+        setNotifications(firestoreNotifs);
+        setIsNotificationsLoading(false);
+      },
+      (error) => {
+        console.warn('Notifications subscription note:', error);
+        setIsNotificationsLoading(false);
+      }
+    );
+
+    return () => unsubscribeNotifs();
+  }, [firebaseUser]);
+
+  const unreadNotificationsCount = notifications.filter((n) => !n.isRead).length;
+
+  const markNotificationRead = async (notificationId: string) => {
+    // Optimistic UI update
+    setNotifications((prev) =>
+      prev.map((n) => (n.notificationId === notificationId || n.id === notificationId ? { ...n, isRead: true } : n))
+    );
+
+    if (firebaseUser) {
+      try {
+        await markNotificationAsRead(firebaseUser.uid, notificationId);
+      } catch (err) {
+        console.warn('Error marking notification as read in Firestore:', err);
+      }
+    }
+  };
+
+  const markNotificationUnread = async (notificationId: string) => {
+    // Optimistic UI update
+    setNotifications((prev) =>
+      prev.map((n) => (n.notificationId === notificationId || n.id === notificationId ? { ...n, isRead: false } : n))
+    );
+
+    if (firebaseUser) {
+      try {
+        await markNotificationAsUnread(firebaseUser.uid, notificationId);
+      } catch (err) {
+        console.warn('Error marking notification as unread in Firestore:', err);
+      }
+    }
+  };
+
+  const markAllNotificationsRead = async () => {
+    const unreadList = notifications.filter((n) => !n.isRead);
+    if (unreadList.length === 0) return;
+
+    // Optimistic UI update
+    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    showToast('सभी सूचनाएं पढ़ी गईं (All marked as read)');
+
+    if (firebaseUser) {
+      try {
+        await markAllNotificationsAsRead(firebaseUser.uid, unreadList);
+      } catch (err) {
+        console.warn('Error batch marking notifications as read:', err);
+      }
+    }
+  };
+
+  const deleteNotificationItem = async (notificationId: string) => {
+    // Optimistic UI removal
+    setNotifications((prev) =>
+      prev.filter((n) => n.notificationId !== notificationId && n.id !== notificationId)
+    );
+    showToast('सूचना हटा दी गई (Notification Removed)');
+
+    if (firebaseUser) {
+      try {
+        await deleteFirestoreNotification(firebaseUser.uid, notificationId);
+      } catch (err) {
+        console.warn('Error deleting notification from Firestore:', err);
+      }
+    }
+  };
+
+  // Firebase Sign Up with Email and Password
+  const signUpWithFirebase = async (
+    email: string, 
+    pass: string, 
+    fullName: string, 
+    username: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
+      const user = cred.user;
+
+      // Update auth profile
+      await updateFirebaseAuthProfile(user, {
+        displayName: fullName.trim(),
+        photoURL: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80'
+      });
+
+      // Save user profile in Firestore users collection using UID as document ID
+      const userProfile = await saveOrUpdateUserProfile(user, {
+        name: fullName.trim(),
+        username: username.trim()
+      });
+
+      setCurrentUser(userProfile);
+      setUsers((prev) => [userProfile, ...prev]);
+
+      setIsAuthModalOpen(false);
+      showToast(`स्वागत है, ${fullName}! आपका Firebase खाता तैयार है।`);
+      return { success: true };
+    } catch (err: any) {
+      let friendlyError = 'साइन अप विफल रहा। कृपया पुनः प्रयास करें।';
+      if (err.code === 'auth/email-already-in-use') {
+        friendlyError = 'यह ईमेल पहले से पंजीकृत है। कृपया लॉगिन करें।';
+      } else if (err.code === 'auth/weak-password') {
+        friendlyError = 'पासवर्ड कम से कम 6 अक्षरों का होना चाहिए।';
+      } else if (err.code === 'auth/invalid-email') {
+        friendlyError = 'कृपया एक मान्य ईमेल पता दर्ज करें।';
+      } else if (err.code === 'auth/operation-not-allowed') {
+        friendlyError = 'Firebase Console में "Email/Password" साइन-इन विधि चालू होनी चाहिए।';
+      } else if (err?.message) {
+        friendlyError = err.message;
+      }
+      return { success: false, error: friendlyError };
+    }
+  };
+
+  // Firebase Login with Email and Password
+  const loginWithFirebase = async (
+    email: string, 
+    pass: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    try {
+      const cred = await signInWithEmailAndPassword(auth, email.trim(), pass);
+      const user = cred.user;
+
+      // Sync and load user profile from Firestore users/{uid}
+      const userProfile = await saveOrUpdateUserProfile(user);
+      setCurrentUser(userProfile);
+
+      setIsAuthModalOpen(false);
+      showToast(`सफलतापूर्वक लॉगिन: ${userProfile.fullName || user.email}`);
+      return { success: true };
+    } catch (err: any) {
+      let friendlyError = 'लॉगिन विफल रहा। कृपया अपनी जानकारी जांचें।';
+      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
+        friendlyError = 'अमान्य ईमेल या पासवर्ड। कृपया पुनः जांचें।';
+      } else if (err.code === 'auth/invalid-email') {
+        friendlyError = 'अमान्य ईमेल पता।';
+      } else if (err.code === 'auth/operation-not-allowed') {
+        friendlyError = 'Firebase Console में Email/Password विकल्प चालू होना चाहिए।';
+      } else if (err?.message) {
+        friendlyError = err.message;
+      }
+      return { success: false, error: friendlyError };
+    }
+  };
+
+  // Firebase Logout
+  const logoutWithFirebase = async () => {
+    try {
+      await signOut(auth);
+      setFirebaseUser(null);
+      // Revert to demo viewer
+      setCurrentUser(INITIAL_USERS[0]);
+      showToast('सफलतापूर्वक लॉग आउट हो गया (Logged Out)');
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
+  };
+
+  const toggleLikePost = async (postId: string) => {
+    const post = posts.find((p) => p.id === postId);
+    if (!post) return;
+
+    const currentLiked = post.isLiked;
+    const nextLiked = !currentLiked;
+    const nextLikesCount = Math.max(0, post.likesCount + (nextLiked ? 1 : -1));
+
+    // Optimistic UI update
     setPosts((prev) =>
       prev.map((p) => {
         if (p.id === postId) {
-          const nextLiked = !p.isLiked;
           return {
             ...p,
             isLiked: nextLiked,
-            likesCount: p.likesCount + (nextLiked ? 1 : -1)
+            likesCount: nextLikesCount,
+            likeCount: nextLikesCount
           };
         }
         return p;
       })
     );
+
+    // Sync to Firestore if authenticated
+    if (firebaseUser) {
+      try {
+        const postAuthorUid = post.authorUid || post.authorId || post.author?.uid || post.author?.id;
+        await toggleLikeFirestorePost(
+          postId,
+          firebaseUser.uid,
+          post.likesCount,
+          post.likedUserIds || [],
+          postAuthorUid,
+          currentUser
+        );
+      } catch (err) {
+        console.warn('Firestore like sync notice:', err);
+      }
+    }
   };
 
   const toggleSavePost = (postId: string) => {
@@ -116,77 +469,224 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
     );
   };
 
-  const addComment = (postId: string, text: string) => {
-    if (!text.trim()) return;
-    const newComment = {
+  const addComment = async (postId: string, text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+
+    if (!firebaseUser && !auth.currentUser) {
+      showToast('कमेंट करने के लिए कृपया पहले लॉगिन करें।');
+      setIsAuthModalOpen(true);
+      return;
+    }
+
+    const optimisticComment: PostComment = {
       id: `c_${Date.now()}`,
+      postId,
       author: currentUser,
-      text: text.trim(),
-      createdAt: 'Just now',
+      authorUid: currentUser.uid || currentUser.id,
+      authorName: currentUser.fullName || currentUser.name,
+      authorAvatar: currentUser.photoURL || currentUser.avatar,
+      authorHandle: currentUser.handle,
+      text: trimmed,
+      createdAt: 'अभी-अभी (Just now)',
       likesCount: 0
     };
 
+    // Optimistically update post's commentsCount and comments list
     setPosts((prev) =>
       prev.map((p) => {
         if (p.id === postId) {
           return {
             ...p,
             commentsCount: p.commentsCount + 1,
-            comments: [newComment, ...p.comments]
+            comments: [...(p.comments || []), optimisticComment]
           };
         }
         return p;
       })
     );
+
     showToast('टिप्पणी पोस्ट की गई (Comment Added)');
+
+    // Save to Firestore sub-collection posts/{postId}/comments
+    try {
+      const post = posts.find((p) => p.id === postId);
+      const postAuthorUid = post?.authorUid || post?.authorId || post?.author?.uid || post?.author?.id;
+      await addFirestoreComment(postId, trimmed, currentUser, postAuthorUid);
+    } catch (err: any) {
+      console.error('Error saving comment to Firestore subcollection:', err);
+      showToast(err?.message || 'कमेंट सेव करने में त्रुटि हुई।');
+    }
   };
 
-  const toggleFollowUser = (userId: string) => {
-    setUsers((prev) =>
-      prev.map((u) => {
-        if (u.id === userId) {
-          const nextFollowing = !u.isFollowing;
-          showToast(nextFollowing ? `आपने ${u.fullName} को फ़ॉलो किया` : `${u.fullName} को अनफ़ॉलो किया`);
-          return {
-            ...u,
-            isFollowing: nextFollowing,
-            followersCount: u.followersCount + (nextFollowing ? 1 : -1)
-          };
-        }
-        return u;
-      })
-    );
+  const toggleFollowUser = async (target: string | User) => {
+    const targetUser = typeof target === 'string'
+      ? users.find((u) => u.id === target || u.uid === target) || { id: target, fullName: 'क्रिएटर', name: 'क्रिएटर' }
+      : target;
+
+    const targetId = ('uid' in targetUser && targetUser.uid) ? targetUser.uid : targetUser.id;
+    const currentUid = firebaseUser?.uid || auth.currentUser?.uid;
+
+    if (!currentUid) {
+      showToast('फ़ॉलो करने के लिए कृपया पहले लॉगिन करें।');
+      setIsAuthModalOpen(true);
+      return;
+    }
+
+    // Requirement 5: User cannot follow themselves
+    if (currentUid === targetId) {
+      showToast('आप स्वयं को फ़ॉलो नहीं कर सकते!');
+      return;
+    }
+
+    const isCurrentlyFollowing = followingIds.includes(targetId);
+    const targetName = targetUser.fullName || targetUser.name || 'क्रिएटर';
+
+    // Optimistic UI updates
+    if (isCurrentlyFollowing) {
+      setFollowingIds((prev) => prev.filter((id) => id !== targetId));
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === targetId || u.uid === targetId
+            ? { ...u, isFollowing: false, followersCount: Math.max(0, u.followersCount - 1) }
+            : u
+        )
+      );
+      setCurrentUser((prev) => ({
+        ...prev,
+        followingCount: Math.max(0, prev.followingCount - 1)
+      }));
+      showToast(`आपने ${targetName} को अनफ़ॉलो किया (Unfollowed)`);
+    } else {
+      setFollowingIds((prev) => [...prev.filter((id) => id !== targetId), targetId]);
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === targetId || u.uid === targetId
+            ? { ...u, isFollowing: true, followersCount: u.followersCount + 1 }
+            : u
+        )
+      );
+      setCurrentUser((prev) => ({
+        ...prev,
+        followingCount: prev.followingCount + 1
+      }));
+      showToast(`आपने ${targetName} को फ़ॉलो किया! (Following)`);
+    }
+
+    // Persist to Firestore
+    try {
+      if (isCurrentlyFollowing) {
+        await unfollowUserInFirestore(targetId);
+      } else {
+        await followUserInFirestore(targetUser);
+      }
+    } catch (err: any) {
+      console.error('Firestore follow toggle error:', err);
+      // Revert optimistic update on error
+      if (isCurrentlyFollowing) {
+        setFollowingIds((prev) => [...prev, targetId]);
+      } else {
+        setFollowingIds((prev) => prev.filter((id) => id !== targetId));
+      }
+      showToast(err?.message || 'फ़ॉलो करने में त्रुटि हुई।');
+    }
   };
 
-  const createPost = (caption: string, imageUrl: string, locationName: string, tags: string[]) => {
-    const newPost: Post = {
-      id: `post_${Date.now()}`,
-      author: currentUser,
-      caption: caption.trim(),
-      imageUrl: imageUrl || 'https://images.unsplash.com/photo-1561361513-2d000a50f0dc?w=800&auto=format&fit=crop&q=80',
-      likesCount: 0,
-      commentsCount: 0,
-      sharesCount: 0,
-      isLiked: false,
-      isSaved: false,
-      locationName: locationName || currentUser.location,
-      createdAt: 'Just now',
-      language,
-      tags: tags.length ? tags : ['BharatConnect', 'DesiSocial'],
-      comments: []
-    };
+  const createPost = async (
+    caption: string, 
+    imageUrl: string, 
+    locationName: string, 
+    tags: string[],
+    audioOptions?: { audioURL: string; audioDuration?: number | string; audioTitle?: string }
+  ): Promise<boolean> => {
+    // Constraint: Only authenticated users can create posts
+    if (!firebaseUser && !auth.currentUser) {
+      showToast('केवल लॉगिन किए हुए यूज़र ही पोस्ट बना सकते हैं! कृपया पहले लॉगिन करें।');
+      setIsAuthModalOpen(true);
+      return false;
+    }
 
-    setPosts((prev) => [newPost, ...prev]);
-    // Increment post count on currentUser
-    setCurrentUser((prev) => ({ ...prev, postCount: prev.postCount + 1 }));
-    setActiveTab('home');
-    showToast('आपकी नई पोस्ट साझा हो गई है! (Post Published)');
+    try {
+      const newPost = await createFirestorePost({
+        text: caption,
+        imageURL: imageUrl,
+        locationName,
+        tags,
+        currentUserProfile: currentUser,
+        audioURL: audioOptions?.audioURL,
+        audioDuration: audioOptions?.audioDuration,
+        audioTitle: audioOptions?.audioTitle,
+        mediaType: audioOptions?.audioURL ? 'audio' : (imageUrl ? 'image' : 'text')
+      });
+
+      // Optimistically place new post at top of feed
+      setPosts((prev) => [newPost, ...prev.filter((p) => p.id !== newPost.id)]);
+      setCurrentUser((prev) => ({ ...prev, postCount: prev.postCount + 1 }));
+      setActiveTab('home');
+      showToast('आपकी नई पोस्ट Firestore में सफलतापूर्वक प्रकाशित हो गई!');
+      return true;
+    } catch (err: any) {
+      console.error('Error creating post in Firestore:', err);
+      const msg = err?.message || 'पोस्ट प्रकाशित करने में समस्या आई।';
+      showToast(`त्रुटि: ${msg}`);
+      throw err;
+    }
   };
 
-  const deletePost = (postId: string) => {
+  const deletePost = async (postId: string) => {
+    const postToDelete = posts.find((p) => p.id === postId);
+    const authorUid = postToDelete?.authorUid || postToDelete?.author?.uid || postToDelete?.author?.id;
+
+    // Immediate UI removal
     setPosts((prev) => prev.filter((p) => p.id !== postId));
     setCurrentUser((prev) => ({ ...prev, postCount: Math.max(0, prev.postCount - 1) }));
-    showToast('पोस्ट हटा दी गई (Post Removed)');
+
+    if (firebaseUser && authorUid) {
+      try {
+        await deleteFirestorePost(postId, authorUid);
+        showToast('पोस्ट Firestore से हटा दी गई (Post Removed)');
+      } catch (err: any) {
+        console.error('Error deleting post from Firestore:', err);
+        showToast('पोस्ट हटाने में समस्या आई।');
+      }
+    } else {
+      showToast('पोस्ट हटा दी गई (Post Removed)');
+    }
+  };
+
+  const updatePostCaption = async (postId: string, newCaption: string): Promise<boolean> => {
+    const trimmed = newCaption.trim();
+    if (!trimmed) {
+      showToast('कैप्शन खाली नहीं हो सकता');
+      return false;
+    }
+
+    // Optimistic UI update
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p.id === postId) {
+          return {
+            ...p,
+            text: trimmed,
+            caption: trimmed
+          };
+        }
+        return p;
+      })
+    );
+
+    showToast('कैप्शन सफलतापूर्वक अपडेट हो गया! (Caption Updated)');
+
+    if (firebaseUser) {
+      try {
+        await updateFirestorePostCaption(postId, trimmed);
+      } catch (err: any) {
+        console.error('Error updating caption in Firestore:', err);
+        showToast('कैप्शन अपडेट करने में समस्या आई।');
+        return false;
+      }
+    }
+    return true;
   };
 
   const toggleLikeReel = (reelId: string) => {
@@ -237,17 +737,28 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const updateProfile = (fullName: string, bio: string, location: string, avatar?: string) => {
-    setCurrentUser((prev) => ({
-      ...prev,
-      fullName: fullName.trim() || prev.fullName,
+    const updated = {
+      fullName: fullName.trim() || currentUser.fullName,
       bio: bio.trim(),
-      location: location.trim() || prev.location,
-      avatar: avatar || prev.avatar
-    }));
+      location: location.trim() || currentUser.location,
+      avatar: avatar || currentUser.avatar
+    };
 
+    setCurrentUser((prev) => ({ ...prev, ...updated }));
     setUsers((prev) =>
-      prev.map((u) => (u.id === currentUser.id ? { ...u, fullName, bio, location } : u))
+      prev.map((u) => (u.id === currentUser.id ? { ...u, ...updated } : u))
     );
+
+    // Sync to Firebase if logged in
+    if (firebaseUser) {
+      updateDoc(doc(db, 'users', firebaseUser.uid), updated).catch((e) =>
+        console.warn('Firestore profile sync warning:', e)
+      );
+      updateFirebaseAuthProfile(firebaseUser, {
+        displayName: updated.fullName,
+        photoURL: updated.avatar
+      }).catch((e) => console.warn('Auth update error:', e));
+    }
 
     showToast('प्रोफ़ाइल सफलतापूर्वक अपडेट हुई! (Profile Updated)');
   };
@@ -280,9 +791,12 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const logout = () => {
-    // Switch to another demo user or reset
-    setCurrentUser(INITIAL_USERS[0]);
-    showToast('सफलतापूर्वक लॉग आउट हुआ (Logged Out)');
+    if (firebaseUser) {
+      logoutWithFirebase();
+    } else {
+      setCurrentUser(INITIAL_USERS[0]);
+      showToast('सफलतापूर्वक लॉग आउट हुआ (Logged Out)');
+    }
   };
 
   return (
@@ -294,11 +808,20 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
         activeTab,
         setActiveTab,
         currentUser,
-        users,
+        users: users.map((u) => ({
+          ...u,
+          isFollowing: followingIds.includes(u.id) || (u.uid ? followingIds.includes(u.uid) : false)
+        })),
         posts: posts.filter((p) => !blockedUserIds.includes(p.author.id)),
         stories,
         reels,
         notifications,
+        unreadNotificationsCount,
+        isNotificationsLoading,
+        markNotificationRead,
+        markNotificationUnread,
+        markAllNotificationsRead,
+        deleteNotificationItem,
         reports,
         blockedUserIds,
         isPhoneFrame,
@@ -307,12 +830,23 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
         setIsAuthModalOpen,
         toastMessage,
         setToastMessage,
+        firebaseUser,
+        isFirebaseAuthLoggedIn: !!firebaseUser,
+        isAuthLoading,
+        signUpWithFirebase,
+        loginWithFirebase,
+        logoutWithFirebase,
+        followingIds,
+        viewingUser,
+        setViewingUser,
+        openUserProfile,
         toggleLikePost,
         toggleSavePost,
         addComment,
         toggleFollowUser,
         createPost,
         deletePost,
+        updatePostCaption,
         toggleLikeReel,
         reportContent,
         blockUser,

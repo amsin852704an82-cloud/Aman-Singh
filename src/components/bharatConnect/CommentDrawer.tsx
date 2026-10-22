@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
-import { Post } from '../../types/bharatConnect';
+import React, { useState, useEffect } from 'react';
+import { Post, PostComment } from '../../types/bharatConnect';
 import { useBharatConnect } from '../../context/BharatConnectContext';
-import { X, Send, Heart } from 'lucide-react';
+import { subscribeToPostComments, deleteFirestoreComment } from '../../lib/postService';
+import { X, Send, Heart, Trash2, MessageCircle, Loader2 } from 'lucide-react';
 
 interface CommentDrawerProps {
   post: Post | null;
@@ -9,86 +10,157 @@ interface CommentDrawerProps {
 }
 
 export const CommentDrawer: React.FC<CommentDrawerProps> = ({ post, onClose }) => {
-  const { addComment, t, currentUser } = useBharatConnect();
+  const { addComment, t, currentUser, isFirebaseAuthLoggedIn, setIsAuthModalOpen } = useBharatConnect();
   const [commentText, setCommentText] = useState('');
+  const [firestoreComments, setFirestoreComments] = useState<PostComment[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Subscribe to real-time comments from Firestore sub-collection: posts/{postId}/comments
+  useEffect(() => {
+    if (!post?.id) return;
+
+    // Use initial local comments while listening
+    if (post.comments && post.comments.length > 0) {
+      setFirestoreComments(post.comments);
+    }
+
+    const unsub = subscribeToPostComments(post.id, (comments) => {
+      if (comments.length > 0) {
+        setFirestoreComments(comments);
+      }
+    });
+
+    return () => unsub();
+  }, [post?.id]);
 
   if (!post) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const currentUid = currentUser.uid || currentUser.id;
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!commentText.trim()) return;
-    addComment(post.id, commentText);
-    setCommentText('');
+    const txt = commentText.trim();
+    if (!txt) return;
+
+    if (!isFirebaseAuthLoggedIn) {
+      setIsAuthModalOpen(true);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await addComment(post.id, txt);
+      setCommentText('');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
+  const handleDeleteComment = async (commentId: string) => {
+    if (!confirm('क्या आप यह टिप्पणी हटाना चाहते हैं?')) return;
+    try {
+      await deleteFirestoreComment(post.id, commentId);
+      setFirestoreComments((prev) => prev.filter((c) => c.id !== commentId));
+    } catch (e) {
+      console.error('Delete comment error:', e);
+    }
+  };
+
+  const displayedComments = firestoreComments.length > 0 ? firestoreComments : post.comments;
+
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl animate-in slide-in-from-bottom duration-200">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in">
+      <div className="w-full max-w-lg bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-3xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl">
         {/* Grab Handle for Mobile */}
         <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto my-2.5 sm:hidden" />
 
         {/* Header */}
-        <div className="px-5 py-3 border-b border-slate-800 flex items-center justify-between">
-          <h3 className="font-bold text-sm text-white">
-            {t.comments} ({post.comments.length})
-          </h3>
+        <div className="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
+          <div className="flex items-center gap-2">
+            <MessageCircle className="w-4 h-4 text-orange-400" />
+            <h3 className="font-bold text-sm text-white">
+              {t.comments} ({displayedComments.length})
+            </h3>
+          </div>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
+            className="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition cursor-pointer"
+            aria-label="Close"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Comments Scrollable Body */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4 max-h-96">
-          {post.comments.length === 0 ? (
-            <div className="py-8 text-center text-slate-500 text-xs">
-              अभी कोई टिप्पणी नहीं है। पहली टिप्पणी लिखें!
+        <div className="flex-1 overflow-y-auto p-5 space-y-4 max-h-96 min-h-[220px]">
+          {displayedComments.length === 0 ? (
+            <div className="py-12 text-center text-slate-500 text-xs flex flex-col items-center justify-center gap-2">
+              <MessageCircle className="w-8 h-8 text-slate-600 stroke-1" />
+              <p>अभी कोई टिप्पणी नहीं है। पहली टिप्पणी लिखें!</p>
             </div>
           ) : (
-            post.comments.map((comment) => (
-              <div key={comment.id} className="flex items-start gap-3 text-xs">
-                <img
-                  src={comment.author.avatar}
-                  alt={comment.author.fullName}
-                  className="w-8 h-8 rounded-full object-cover shrink-0"
-                />
-                <div className="flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-semibold text-white">{comment.author.fullName}</span>
-                    <span className="text-[10px] text-slate-500 font-mono">{comment.createdAt}</span>
+            displayedComments.map((comment) => {
+              const authorAvatar = comment.author?.photoURL || comment.author?.avatar || comment.authorAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80';
+              const authorName = comment.author?.fullName || comment.author?.name || comment.authorName || 'भारत नागरिक';
+              const isMyComment = comment.authorUid === currentUid || comment.author?.id === currentUid;
+
+              return (
+                <div key={comment.id} className="flex items-start gap-3 text-xs group">
+                  <img
+                    src={authorAvatar}
+                    alt={authorName}
+                    className="w-8 h-8 rounded-full object-cover shrink-0 border border-slate-700"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold text-white">{authorName}</span>
+                        <span className="text-[10px] text-slate-500 font-mono">{comment.createdAt}</span>
+                      </div>
+
+                      {isMyComment && (
+                        <button
+                          onClick={() => handleDeleteComment(comment.id)}
+                          className="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-rose-400 p-1 transition"
+                          title="टिप्पणी हटाएं"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-slate-200 mt-1 leading-relaxed break-words">{comment.text}</p>
                   </div>
-                  <p className="text-slate-200 mt-0.5 leading-relaxed">{comment.text}</p>
                 </div>
-                <button className="text-slate-500 hover:text-rose-500 pt-1 cursor-pointer">
-                  <Heart className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
         {/* Input Bar */}
         <form onSubmit={handleSubmit} className="p-3 bg-slate-950 border-t border-slate-800 flex items-center gap-2">
           <img
-            src={currentUser.avatar}
-            alt={currentUser.fullName}
-            className="w-8 h-8 rounded-full object-cover shrink-0"
+            src={currentUser.photoURL || currentUser.avatar}
+            alt={currentUser.fullName || currentUser.name}
+            className="w-8 h-8 rounded-full object-cover shrink-0 border border-orange-500/40"
           />
           <input
             type="text"
             value={commentText}
             onChange={(e) => setCommentText(e.target.value)}
-            placeholder={t.writeComment}
-            className="flex-1 bg-slate-900 text-xs text-slate-200 px-3.5 py-2.5 rounded-full border border-slate-800 focus:outline-none focus:border-orange-500/60 placeholder-slate-500"
+            placeholder={isFirebaseAuthLoggedIn ? t.writeComment : 'कमेंट करने के लिए लॉगिन करें...'}
+            disabled={isSubmitting}
+            className="flex-1 bg-slate-900 text-xs text-slate-200 px-3.5 py-2.5 rounded-full border border-slate-800 focus:outline-none focus:border-orange-500 placeholder-slate-500"
           />
           <button
             type="submit"
-            disabled={!commentText.trim()}
-            className="w-9 h-9 rounded-full bg-orange-500 disabled:bg-slate-800 text-white disabled:text-slate-600 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+            disabled={!commentText.trim() || isSubmitting}
+            className="w-9 h-9 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 disabled:from-slate-800 disabled:to-slate-800 text-white disabled:text-slate-600 flex items-center justify-center transition shadow-md active:scale-95 cursor-pointer shrink-0"
           >
-            <Send className="w-4 h-4 ml-0.5" />
+            {isSubmitting ? (
+              <Loader2 className="w-4 h-4 animate-spin text-white" />
+            ) : (
+              <Send className="w-4 h-4 ml-0.5" />
+            )}
           </button>
         </form>
       </div>

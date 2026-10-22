@@ -1,0 +1,192 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile data stored in Firestore users collection using UID as document ID",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Authentication User UID" },
+        "id": { "type": "string", "description": "Unique user ID (same as UID)" },
+        "name": { "type": "string", "description": "User display name" },
+        "fullName": { "type": "string", "description": "User full name" },
+        "email": { "type": "string", "description": "User email address" },
+        "photoURL": { "type": "string", "description": "Profile picture URL" },
+        "avatar": { "type": "string", "description": "Profile avatar URL" },
+        "username": { "type": "string", "description": "Handle username without @" },
+        "handle": { "type": "string", "description": "Display handle e.g. @username" },
+        "bio": { "type": "string", "description": "Short bio or tagline" },
+        "location": { "type": "string", "description": "City or state location" },
+        "verified": { "type": "boolean", "description": "Verified status badge" },
+        "followersCount": { "type": "number", "description": "Follower count" },
+        "followingCount": { "type": "number", "description": "Following count" },
+        "postCount": { "type": "number", "description": "Total number of posts" },
+        "language": { "type": "string", "description": "Preferred language code" },
+        "createdAt": { "type": "string", "description": "Account creation timestamp" },
+        "updatedAt": { "type": "string", "description": "Profile last updated timestamp" }
+      },
+      "required": ["uid", "name", "email", "createdAt"]
+    },
+    "SocialPost": {
+      "title": "SocialPost",
+      "description": "Feed post with text, photo, author metadata, and metrics",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string", "description": "Unique post ID" },
+        "authorUid": { "type": "string", "description": "Firebase Auth user UID of author" },
+        "authorName": { "type": "string", "description": "Author display or full name" },
+        "authorPhotoURL": { "type": "string", "description": "Author profile photo URL" },
+        "text": { "type": "string", "description": "Post text and caption content", "maxLength": 1000 },
+        "imageURL": { "type": "string", "description": "Photo URL or preset URL, empty string for text-only posts" },
+        "createdAt": { "type": "string", "description": "Creation ISO timestamp" },
+        "likeCount": { "type": "number", "description": "Total likes count" },
+        "likesCount": { "type": "number", "description": "Likes count for UI compatibility" },
+        "likedBy": { "type": "array", "description": "Array of user UIDs who liked the post" },
+        "commentsCount": { "type": "number", "description": "Comments count for UI compatibility" },
+        "id": { "type": "string", "description": "Post identifier for UI compatibility" },
+        "authorId": { "type": "string", "description": "Author UID for UI compatibility" },
+        "caption": { "type": "string", "description": "Caption text for UI compatibility" },
+        "imageUrl": { "type": "string", "description": "Image URL for UI compatibility" },
+        "locationName": { "type": "string", "description": "Geographical location" },
+        "tags": { "type": "string", "description": "Tags or keywords" },
+        "audioURL": { "type": "string", "description": "Audio voice/shayari recording URL" },
+        "audioDuration": { "type": "number", "description": "Audio duration in seconds" },
+        "mediaType": { "type": "string", "description": "Type of post media: image, audio, or text" }
+      },
+      "required": ["postId", "authorUid", "authorName", "text", "createdAt", "likeCount"]
+    },
+    "PostComment": {
+      "title": "PostComment",
+      "description": "Comment on a social post stored in posts/{postId}/comments sub-collection",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique comment ID" },
+        "postId": { "type": "string", "description": "Associated post ID" },
+        "authorUid": { "type": "string", "description": "Comment author Firebase Auth UID" },
+        "authorName": { "type": "string", "description": "Comment author display name" },
+        "authorAvatar": { "type": "string", "description": "Comment author avatar URL" },
+        "authorHandle": { "type": "string", "description": "Comment author handle" },
+        "text": { "type": "string", "description": "Comment text content", "maxLength": 500 },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["id", "postId", "authorUid", "authorName", "text", "createdAt"]
+    },
+    "UserFollow": {
+      "title": "UserFollow",
+      "description": "Represents a follow relationship between two users in the network",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique follow identifier, typically followerUid_followingUid" },
+        "followerUid": { "type": "string", "description": "UID of the user who followed" },
+        "followingUid": { "type": "string", "description": "UID of the user being followed" },
+        "followerName": { "type": "string", "description": "Display name of the follower" },
+        "followingName": { "type": "string", "description": "Display name of the target followed user" },
+        "createdAt": { "type": "string", "description": "Timestamp when follow occurred" }
+      },
+      "required": ["id", "followerUid", "followingUid", "createdAt"]
+    },
+    "NotificationItem": {
+      "title": "NotificationItem",
+      "description": "User notification for likes, comments, and follows stored in users/{recipientUid}/notifications",
+      "type": "object",
+      "properties": {
+        "notificationId": { "type": "string", "description": "Unique deterministic notification identifier" },
+        "recipientUid": { "type": "string", "description": "Firebase Auth UID of the recipient" },
+        "senderUid": { "type": "string", "description": "Firebase Auth UID of the sender" },
+        "senderName": { "type": "string", "description": "Display name of the sender" },
+        "senderPhotoURL": { "type": "string", "description": "Avatar URL of the sender" },
+        "type": { "type": "string", "description": "Notification category", "enum": ["like", "comment", "follow"] },
+        "postId": { "type": "string", "description": "Associated post ID if applicable" },
+        "message": { "type": "string", "description": "Localized text message" },
+        "createdAt": { "type": "string", "description": "ISO timestamp" },
+        "isRead": { "type": "boolean", "description": "Read status" }
+      },
+      "required": ["notificationId", "recipientUid", "senderUid", "senderName", "type", "message", "createdAt"]
+    },
+    "ChatConversation": {
+      "title": "ChatConversation",
+      "description": "1-on-1 chat metadata and participants stored in chats/{chatId}",
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "string", "description": "Deterministic conversation ID (uid1_uid2)" },
+        "participants": { "type": "array", "description": "Array of 2 participant UIDs" },
+        "lastMessage": { "type": "string", "description": "Latest message preview snippet" },
+        "lastMessageTimestamp": { "type": "string", "description": "ISO timestamp of last message" },
+        "lastSenderUid": { "type": "string", "description": "UID of author who sent last message" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp of last update" }
+      },
+      "required": ["chatId", "participants", "updatedAt"]
+    },
+    "ChatMessage": {
+      "title": "ChatMessage",
+      "description": "Individual message stored in chats/{chatId}/messages/{messageId}",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique message ID" },
+        "chatId": { "type": "string", "description": "Parent chat ID" },
+        "senderUid": { "type": "string", "description": "UID of sender" },
+        "senderName": { "type": "string", "description": "Display name of sender" },
+        "senderAvatar": { "type": "string", "description": "Avatar URL of sender" },
+        "text": { "type": "string", "description": "Message text content", "maxLength": 1000 },
+        "createdAt": { "type": "string", "description": "ISO timestamp" }
+      },
+      "required": ["id", "chatId", "senderUid", "senderName", "text", "createdAt"]
+    },
+    "HunarPost": {
+      "title": "HunarPost",
+      "description": "Skill Exchange post where users offer or request skills with level, category, and direct chat connection",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique Hunar post ID" },
+        "authorUid": { "type": "string", "description": "Firebase Auth UID of skill teacher or learner" },
+        "authorName": { "type": "string", "description": "Author display or full name" },
+        "authorPhotoURL": { "type": "string", "description": "Author profile photo URL" },
+        "authorHandle": { "type": "string", "description": "Author handle with @" },
+        "title": { "type": "string", "description": "Skill title e.g. Cooking, Coding, Guitar, Painting" },
+        "description": { "type": "string", "description": "Details about the skill offer or learning need" },
+        "category": { "type": "string", "description": "Category e.g. cooking, coding, music, art, fitness, crafts" },
+        "level": { "type": "string", "description": "Skill proficiency level", "enum": ["beginner", "intermediate", "pro"] },
+        "offerType": { "type": "string", "description": "teach (I can teach this) or learn (Want to learn)", "enum": ["teach", "learn"] },
+        "mediaUrl": { "type": "string", "description": "Photo or video preview URL" },
+        "mediaType": { "type": "string", "description": "Type of media", "enum": ["image", "video"] },
+        "learnersCount": { "type": "number", "description": "Count of interested learners" },
+        "location": { "type": "string", "description": "Location or Online" },
+        "createdAt": { "type": "string", "description": "Creation ISO timestamp" }
+      },
+      "required": ["id", "authorUid", "authorName", "title", "description", "category", "level", "offerType", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profiles stored by UID, public fields readable by all, editable only by the owner or follow metrics"
+    },
+    "/users/{userId}/notifications/{notificationId}": {
+      "schema": "NotificationItem",
+      "description": "User notifications, readable, updatable, and deletable by the recipient user, creatable by authenticated senders"
+    },
+    "/posts/{postId}": {
+      "schema": "SocialPost",
+      "description": "Public social posts readable by all, creatable by authenticated author, editable and deletable by author"
+    },
+    "/posts/{postId}/comments/{commentId}": {
+      "schema": "PostComment",
+      "description": "Comments on a post, public read, created by authenticated user, deletable by author or post owner"
+    },
+    "/follows/{followId}": {
+      "schema": "UserFollow",
+      "description": "Follow relationships between users, readable publicly, created and deleted only by authenticated follower"
+    },
+    "/chats/{chatId}": {
+      "schema": "ChatConversation",
+      "description": "Direct 1-on-1 conversations, readable and creatable only by participants"
+    },
+    "/chats/{chatId}/messages/{messageId}": {
+      "schema": "ChatMessage",
+      "description": "Messages inside conversation, readable only by participants, created by authenticated sender"
+    },
+    "/hunar_posts/{hunarId}": {
+      "schema": "HunarPost",
+      "description": "Skill exchange posts readable by all, created and managed by authenticated skill owner"
+    }
+  }
+}
