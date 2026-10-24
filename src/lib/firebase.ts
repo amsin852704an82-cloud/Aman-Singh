@@ -4,6 +4,7 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signInWithPopup,
+  sendPasswordResetEmail,
   GoogleAuthProvider,
   signOut, 
   onAuthStateChanged,
@@ -27,6 +28,7 @@ import {
   serverTimestamp,
   increment,
   writeBatch,
+  runTransaction,
   getDocFromServer 
 } from 'firebase/firestore';
 import { 
@@ -43,8 +45,20 @@ const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 // Initialize Auth
 export const auth = getAuth(app);
 
-// Initialize Firebase Storage
-export const storage = getStorage(app);
+// Initialize Firebase Storage with exact configured storage bucket
+const configuredBucket = firebaseConfig.storageBucket
+  ? (firebaseConfig.storageBucket.startsWith('gs://') ? firebaseConfig.storageBucket : `gs://${firebaseConfig.storageBucket}`)
+  : undefined;
+
+export const storage = configuredBucket ? getStorage(app, configuredBucket) : getStorage(app);
+
+// Configure realistic retry timeouts so uploads never hang at 0% for 10 minutes
+try {
+  storage.maxUploadRetryTime = 25000; // 25 seconds timeout for uploads
+  storage.maxOperationRetryTime = 25000;
+} catch (e) {
+  console.warn('Storage timeout configuration note:', e);
+}
 
 // Initialize Google Auth Provider
 export const googleProvider = new GoogleAuthProvider();
@@ -68,7 +82,9 @@ async function testFirestoreConnection() {
   }
 }
 
-testFirestoreConnection();
+if (typeof window !== 'undefined') {
+  testFirestoreConnection();
+}
 
 export enum OperationType {
   CREATE = 'create',
@@ -121,6 +137,7 @@ export {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signInWithPopup,
+  sendPasswordResetEmail,
   signOut,
   onAuthStateChanged,
   updateFirebaseAuthProfile,
@@ -139,6 +156,7 @@ export {
   serverTimestamp,
   increment,
   writeBatch,
+  runTransaction,
   ref,
   uploadBytesResumable,
   getDownloadURL

@@ -25,6 +25,7 @@ import {
   db, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
+  sendPasswordResetEmail,
   signOut, 
   onAuthStateChanged, 
   updateFirebaseAuthProfile,
@@ -35,6 +36,11 @@ import {
   FirebaseUser 
 } from '../lib/firebase';
 import { saveOrUpdateUserProfile } from '../lib/userProfileService';
+import { 
+  validateUsernameFormat, 
+  checkUsernameAvailability, 
+  claimUsernameTransaction 
+} from '../lib/usernameService';
 import { 
   createFirestorePost, 
   subscribeToFirestorePosts, 
@@ -83,6 +89,7 @@ interface BharatConnectContextType {
   isAuthLoading: boolean;
   signUpWithFirebase: (email: string, pass: string, fullName: string, username: string) => Promise<{ success: boolean; error?: string }>;
   loginWithFirebase: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
+  sendPasswordResetWithFirebase: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   logoutWithFirebase: () => Promise<void>;
 
   // Notifications System State & Actions
@@ -104,12 +111,15 @@ interface BharatConnectContextType {
   toggleLikePost: (postId: string) => void;
   toggleSavePost: (postId: string) => void;
   addComment: (postId: string, text: string) => void;
+  theme: 'dark' | 'light';
+  toggleTheme: () => void;
   createPost: (
     caption: string, 
     imageUrl: string, 
     locationName: string, 
     tags: string[], 
-    audioOptions?: { audioURL: string; audioDuration?: number | string; audioTitle?: string }
+    audioOptions?: { audioURL: string; audioDuration?: number | string; audioTitle?: string },
+    isAnonymous?: boolean
   ) => Promise<boolean>;
   deletePost: (postId: string) => void;
   updatePostCaption: (postId: string, newCaption: string) => Promise<boolean>;
@@ -117,7 +127,7 @@ interface BharatConnectContextType {
   reportContent: (reportedUserId: string, reason: string, details?: string, postId?: string) => void;
   blockUser: (userId: string) => void;
   unblockUser: (userId: string) => void;
-  updateProfile: (fullName: string, bio: string, location: string, avatar?: string) => void;
+  updateProfile: (fullName: string, bio: string, location: string, avatar?: string, newUsername?: string) => Promise<boolean> | void;
   resolveReport: (reportId: string, action: 'dismissed' | 'resolved') => void;
   loginAs: (user: User) => void;
   logout: () => void;
@@ -128,6 +138,39 @@ const BharatConnectContext = createContext<BharatConnectContextType | null>(null
 export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [language, setLanguage] = useState<LanguageCode>('hi'); // Default Hindi
   const [activeTab, setActiveTab] = useState<MainTab>('home');
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try {
+      return (localStorage.getItem('bc_theme') as 'dark' | 'light') || 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
+
+  const toggleTheme = () => {
+    setTheme((prev) => {
+      const next = prev === 'dark' ? 'light' : 'dark';
+      try {
+        localStorage.setItem('bc_theme', next);
+      } catch {}
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    try {
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+        document.body.classList.add('bg-slate-950', 'text-slate-100');
+        document.body.classList.remove('bg-slate-50', 'text-slate-900');
+      } else {
+        document.documentElement.classList.add('light');
+        document.documentElement.classList.remove('dark');
+        document.body.classList.add('bg-slate-50', 'text-slate-900');
+        document.body.classList.remove('bg-slate-950', 'text-slate-100');
+      }
+    } catch {}
+  }, [theme]);
   const [currentUser, setCurrentUser] = useState<User>(CURRENT_USER);
   const [users, setUsers] = useState<User[]>(INITIAL_USERS);
   const [posts, setPosts] = useState<Post[]>(INITIAL_POSTS);
@@ -329,6 +372,18 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
     fullName: string, 
     username: string
   ): Promise<{ success: boolean; error?: string }> => {
+    // 1. Validate Username Format
+    const val = validateUsernameFormat(username);
+    if (!val.valid) {
+      return { success: false, error: val.error };
+    }
+
+    // 2. Check Username Uniqueness in Firestore
+    const availability = await checkUsernameAvailability(val.cleanUsername);
+    if (!availability.available) {
+      return { success: false, error: availability.message };
+    }
+
     try {
       const cred = await createUserWithEmailAndPassword(auth, email.trim(), pass);
       const user = cred.user;
@@ -342,7 +397,7 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
       // Save user profile in Firestore users collection using UID as document ID
       const userProfile = await saveOrUpdateUserProfile(user, {
         name: fullName.trim(),
-        username: username.trim()
+        username: val.cleanUsername
       });
 
       setCurrentUser(userProfile);
@@ -365,6 +420,42 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
         friendlyError = err.message;
       }
       return { success: false, error: friendlyError };
+    }
+  };
+
+  // Send Password Reset Email with Firebase
+  const sendPasswordResetWithFirebase = async (
+    email: string
+  ): Promise<{ success: boolean; message?: string; error?: string }> => {
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      return { success: false, error: 'कृपया पंजीकृत ईमेल पता दर्ज करें।' };
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      return { success: false, error: 'कृपया एक मान्य ईमेल पता दर्ज करें।' };
+    }
+
+    const genericSuccessMsg = 'यदि यह ईमेल BharatConnect पर पंजीकृत है, तो पासवर्ड रीसेट लिंक भेज दिया गया है। कृपया अपना इनबॉक्स (Inbox) या स्पैम फ़ोल्डर चेक करें।';
+
+    try {
+      await sendPasswordResetEmail(auth, cleanEmail);
+      return { success: true, message: genericSuccessMsg };
+    } catch (err: any) {
+      const code = err?.code || '';
+      if (code === 'auth/user-not-found') {
+        return { success: true, message: genericSuccessMsg };
+      }
+      let error = 'पासवर्ड रीसेट ईमेल नहीं भेजा जा सका।';
+      if (code === 'auth/invalid-email') {
+        error = 'ईमेल का प्रारूप अमान्य है। कृपया सही ईमेल दर्ज करें।';
+      } else if (code === 'auth/too-many-requests') {
+        error = 'बहुत अधिक अनुरोध किए गए हैं। कृपया कुछ समय प्रतीक्षा करें और पुनः प्रयास करें।';
+      } else if (code === 'auth/network-request-failed') {
+        error = 'नेटवर्क कनेक्शन विफल रहा। कृपया अपना इंटरनेट कनेक्शन जांचें।';
+      } else if (err?.message) {
+        error = err.message;
+      }
+      return { success: false, error };
     }
   };
 
@@ -479,14 +570,28 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
       return;
     }
 
+    const post = posts.find((p) => p.id === postId);
+    const isAnonPost = Boolean(post?.isAnonymous);
+    const anonAvatar = 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=200&auto=format&fit=crop&q=80';
+
     const optimisticComment: PostComment = {
       id: `c_${Date.now()}`,
       postId,
-      author: currentUser,
-      authorUid: currentUser.uid || currentUser.id,
-      authorName: currentUser.fullName || currentUser.name,
-      authorAvatar: currentUser.photoURL || currentUser.avatar,
-      authorHandle: currentUser.handle,
+      author: isAnonPost ? {
+        ...currentUser,
+        id: 'anonymous',
+        uid: 'anonymous',
+        fullName: 'अनाम साथी',
+        name: 'अनाम साथी',
+        username: 'gupt',
+        handle: '@gupt',
+        photoURL: anonAvatar,
+        avatar: anonAvatar
+      } : currentUser,
+      authorUid: isAnonPost ? 'anonymous' : (currentUser.uid || currentUser.id),
+      authorName: isAnonPost ? 'अनाम साथी' : (currentUser.fullName || currentUser.name),
+      authorAvatar: isAnonPost ? anonAvatar : (currentUser.photoURL || currentUser.avatar),
+      authorHandle: isAnonPost ? '@gupt' : currentUser.handle,
       text: trimmed,
       createdAt: 'अभी-अभी (Just now)',
       likesCount: 0
@@ -506,13 +611,12 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
       })
     );
 
-    showToast('टिप्पणी पोस्ट की गई (Comment Added)');
+    showToast(isAnonPost ? 'अनाम टिप्पणी पोस्ट की गई (Dil Se)' : 'टिप्पणी पोस्ट की गई (Comment Added)');
 
     // Save to Firestore sub-collection posts/{postId}/comments
     try {
-      const post = posts.find((p) => p.id === postId);
-      const postAuthorUid = post?.authorUid || post?.authorId || post?.author?.uid || post?.author?.id;
-      await addFirestoreComment(postId, trimmed, currentUser, postAuthorUid);
+      const postAuthorUid = isAnonPost ? 'anonymous' : (post?.authorUid || post?.authorId || post?.author?.uid || post?.author?.id);
+      await addFirestoreComment(postId, trimmed, currentUser, postAuthorUid, isAnonPost);
     } catch (err: any) {
       console.error('Error saving comment to Firestore subcollection:', err);
       showToast(err?.message || 'कमेंट सेव करने में त्रुटि हुई।');
@@ -597,7 +701,8 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
     imageUrl: string, 
     locationName: string, 
     tags: string[],
-    audioOptions?: { audioURL: string; audioDuration?: number | string; audioTitle?: string }
+    audioOptions?: { audioURL: string; audioDuration?: number | string; audioTitle?: string },
+    isAnonymous?: boolean
   ): Promise<boolean> => {
     // Constraint: Only authenticated users can create posts
     if (!firebaseUser && !auth.currentUser) {
@@ -616,14 +721,15 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
         audioURL: audioOptions?.audioURL,
         audioDuration: audioOptions?.audioDuration,
         audioTitle: audioOptions?.audioTitle,
-        mediaType: audioOptions?.audioURL ? 'audio' : (imageUrl ? 'image' : 'text')
+        mediaType: audioOptions?.audioURL ? 'audio' : (imageUrl ? 'image' : 'text'),
+        isAnonymous
       });
 
       // Optimistically place new post at top of feed
       setPosts((prev) => [newPost, ...prev.filter((p) => p.id !== newPost.id)]);
       setCurrentUser((prev) => ({ ...prev, postCount: prev.postCount + 1 }));
       setActiveTab('home');
-      showToast('आपकी नई पोस्ट Firestore में सफलतापूर्वक प्रकाशित हो गई!');
+      showToast(isAnonymous ? 'आपकी गुमनाम पोस्ट (दिल से) सफलतापूर्वक प्रकाशित हो गई!' : 'आपकी नई पोस्ट Firestore में सफलतापूर्वक प्रकाशित हो गई!');
       return true;
     } catch (err: any) {
       console.error('Error creating post in Firestore:', err);
@@ -736,12 +842,44 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
     showToast('उपयोगकर्ता को अनब्लॉक कर दिया गया है');
   };
 
-  const updateProfile = (fullName: string, bio: string, location: string, avatar?: string) => {
+  const updateProfile = async (
+    fullName: string, 
+    bio: string, 
+    location: string, 
+    avatar?: string,
+    newUsername?: string
+  ): Promise<boolean> => {
+    const currentUsername = currentUser.username;
+    let finalUsername = currentUsername;
+
+    if (newUsername && newUsername.toLowerCase().trim() !== currentUsername) {
+      const val = validateUsernameFormat(newUsername);
+      if (!val.valid) {
+        showToast(val.error || 'अमान्य यूज़रनेम');
+        return false;
+      }
+
+      if (firebaseUser) {
+        const claimRes = await claimUsernameTransaction(val.cleanUsername, firebaseUser.uid, currentUsername);
+        if (!claimRes.success) {
+          showToast(claimRes.error || 'यह यूज़रनेम पहले से किसी अन्य सदस्य द्वारा उपयोग में है।');
+          return false;
+        }
+        finalUsername = claimRes.cleanUsername;
+      } else {
+        finalUsername = val.cleanUsername;
+      }
+    }
+
     const updated = {
       fullName: fullName.trim() || currentUser.fullName,
+      name: fullName.trim() || currentUser.fullName,
       bio: bio.trim(),
       location: location.trim() || currentUser.location,
-      avatar: avatar || currentUser.avatar
+      avatar: avatar || currentUser.avatar,
+      photoURL: avatar || currentUser.avatar,
+      username: finalUsername,
+      handle: `@${finalUsername}`
     };
 
     setCurrentUser((prev) => ({ ...prev, ...updated }));
@@ -751,7 +889,10 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
 
     // Sync to Firebase if logged in
     if (firebaseUser) {
-      updateDoc(doc(db, 'users', firebaseUser.uid), updated).catch((e) =>
+      updateDoc(doc(db, 'users', firebaseUser.uid), {
+        ...updated,
+        updatedAt: new Date().toISOString()
+      }).catch((e) =>
         console.warn('Firestore profile sync warning:', e)
       );
       updateFirebaseAuthProfile(firebaseUser, {
@@ -761,6 +902,7 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     showToast('प्रोफ़ाइल सफलतापूर्वक अपडेट हुई! (Profile Updated)');
+    return true;
   };
 
   const resolveReport = (reportId: string, action: 'dismissed' | 'resolved') => {
@@ -804,6 +946,8 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
       value={{
         language,
         setLanguage,
+        theme,
+        toggleTheme,
         t,
         activeTab,
         setActiveTab,
@@ -835,6 +979,7 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
         isAuthLoading,
         signUpWithFirebase,
         loginWithFirebase,
+        sendPasswordResetWithFirebase,
         logoutWithFirebase,
         followingIds,
         viewingUser,

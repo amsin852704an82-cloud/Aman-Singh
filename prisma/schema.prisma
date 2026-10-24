@@ -1,0 +1,223 @@
+// BharatConnect Prisma Schema for PostgreSQL
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(uuid())
+  uid          String?       @unique // Firebase UID mapping
+  username     String        @unique
+  fullName     String
+  email        String?       @unique
+  avatarUrl    String?
+  bio          String?
+  verified     Boolean       @default(false)
+  accountType  String        @default("Personal")
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  posts        Post[]
+  comments     Comment[]
+  reactions    Reaction[]
+  followers    Follow[]      @relation("FollowingUsers")
+  following    Follow[]      @relation("FollowerUsers")
+  groupMembers GroupMember[]
+  rsvps        EventRsvp[]
+  orders       Order[]
+  bookmarks    Bookmark[]
+
+  @@map("users")
+}
+
+model Post {
+  id            String     @id @default(uuid())
+  authorId      String
+  content       String
+  imageUrl      String?
+  audioUrl      String?
+  likesCount    Int        @default(0)
+  commentsCount Int        @default(0)
+  sharesCount   Int        @default(0)
+  isDilSe       Boolean    @default(false)
+  tags          String[]   @default([])
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  author        User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments      Comment[]
+  reactions     Reaction[]
+  bookmarks     Bookmark[]
+
+  @@map("posts")
+}
+
+model Comment {
+  id        String    @id @default(uuid())
+  postId    String
+  authorId  String
+  content   String
+  parentId  String?
+  createdAt DateTime  @default(now())
+
+  post      Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  parent    Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies   Comment[] @relation("CommentReplies")
+
+  @@map("comments")
+}
+
+model Reaction {
+  id        String   @id @default(uuid())
+  postId    String
+  userId    String
+  type      String   @default("heart") // heart, folded_hands, laugh, clap, salute
+  createdAt DateTime @default(now())
+
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@map("reactions")
+}
+
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower    User     @relation("FollowerUsers", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("FollowingUsers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@map("follows")
+}
+
+model Group {
+  id           String        @id @default(uuid())
+  name         String
+  hindiName    String
+  description  String
+  icon         String
+  banner       String
+  category     String
+  membersCount Int           @default(1)
+  postsCount   Int           @default(0)
+  isPrivate    Boolean       @default(false)
+  createdBy    String?
+  createdAt    DateTime      @default(now())
+
+  members      GroupMember[]
+
+  @@map("groups")
+}
+
+model GroupMember {
+  id       String   @id @default(uuid())
+  groupId  String
+  userId   String
+  role     String   @default("member") // admin, moderator, member
+  joinedAt DateTime @default(now())
+
+  group    Group    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@map("group_members")
+}
+
+model Event {
+  id          String      @id @default(uuid())
+  title       String
+  hindiTitle  String
+  description String
+  category    String
+  date        String
+  time        String
+  location    String
+  city        String
+  image       String
+  organizer   String
+  totalSeats  Int         @default(100)
+  rsvpCount   Int         @default(0)
+  createdAt   DateTime    @default(now())
+
+  rsvps       EventRsvp[]
+
+  @@map("events")
+}
+
+model EventRsvp {
+  id        String   @id @default(uuid())
+  eventId   String
+  userId    String
+  userName  String?
+  userEmail String?
+  createdAt DateTime @default(now())
+
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@map("rsvps")
+}
+
+model Product {
+  id              String   @id @default(uuid())
+  title           String
+  hindiTitle      String
+  description     String
+  price           Float
+  originalPrice   Float
+  discount        String
+  image           String
+  category        String
+  artisanName     String
+  artisanLocation String
+  rating          Float    @default(5.0)
+  reviewsCount    Int      @default(0)
+  isHandmade      Boolean  @default(true)
+  inStock         Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  orders          Order[]
+
+  @@map("products")
+}
+
+model Order {
+  id           String   @id @default(uuid())
+  productId    String
+  buyerId      String?
+  buyerName    String
+  buyerPhone   String
+  buyerAddress String
+  quantity     Int      @default(1)
+  totalAmount  Float
+  status       String   @default("confirmed") // pending, confirmed, shipped, delivered
+  createdAt    DateTime @default(now())
+
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  buyer        User?    @relation(fields: [buyerId], references: [id], onDelete: SetNull)
+
+  @@map("orders")
+}
+
+model Bookmark {
+  id        String   @id @default(uuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@map("bookmarks")
+}

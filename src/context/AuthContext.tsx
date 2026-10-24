@@ -5,12 +5,14 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signInWithPopup, 
+  sendPasswordResetEmail,
   signOut, 
   onAuthStateChanged, 
   updateFirebaseAuthProfile,
   FirebaseUser 
 } from '../lib/firebase';
 import { saveOrUpdateUserProfile } from '../lib/userProfileService';
+import { validateUsernameFormat, checkUsernameAvailability } from '../lib/usernameService';
 import { User } from '../types/bharatConnect';
 
 export interface AuthContextType {
@@ -22,6 +24,7 @@ export interface AuthContextType {
   loginWithEmail: (email: string, pass: string) => Promise<{ success: boolean; error?: string }>;
   signUpWithEmail: (email: string, pass: string, fullName: string, username: string) => Promise<{ success: boolean; error?: string }>;
   loginWithGoogle: () => Promise<{ success: boolean; error?: string }>;
+  sendPasswordReset: (email: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   logout: () => Promise<void>;
   enterDemoMode: () => void;
   exitDemoMode: () => void;
@@ -124,6 +127,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     username: string
   ): Promise<{ success: boolean; error?: string }> => {
     setError(null);
+
+    // 1. Validate Username Format
+    const validation = validateUsernameFormat(username);
+    if (!validation.valid) {
+      const errMsg = validation.error || 'अमान्य यूज़रनेम प्रारूप।';
+      setError(errMsg);
+      return { success: false, error: errMsg };
+    }
+
+    // 2. Check Username Uniqueness in Firestore
+    const availability = await checkUsernameAvailability(validation.cleanUsername);
+    if (!availability.available) {
+      setError(availability.message);
+      return { success: false, error: availability.message };
+    }
+
     try {
       const cleanEmail = email.trim();
       const userCredential = await createUserWithEmailAndPassword(auth, cleanEmail, pass);
@@ -137,11 +156,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Save user profile in Firestore "users/{uid}" collection
       // Document ID: newUser.uid
-      // Fields: uid, name, email, photoURL, createdAt (passwords NEVER stored in database)
+      // Also reserves username in "usernames/{cleanUsername}" collection
       try {
         const profile = await saveOrUpdateUserProfile(newUser, {
           name: fullName.trim(),
-          username: username.trim()
+          username: validation.cleanUsername
         });
         setUserProfile(profile);
       } catch (firestoreErr: any) {
@@ -222,7 +241,56 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // 4. Logout
+  // 4. Send Password Reset Email
+  const sendPasswordReset = async (
+    email: string
+  ): Promise<{ success: boolean; message?: string; error?: string }> => {
+    setError(null);
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      const msg = 'कृपया अपना पंजीकृत ईमेल पता दर्ज करें।';
+      setError(msg);
+      return { success: false, error: msg };
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      const msg = 'कृपया एक मान्य ईमेल पता (उदा. name@example.com) दर्ज करें।';
+      setError(msg);
+      return { success: false, error: msg };
+    }
+
+    const genericSuccessMsg = 'यदि यह ईमेल BharatConnect पर पंजीकृत है, तो पासवर्ड रीसेट लिंक भेज दिया गया है। कृपया अपना इनबॉक्स (Inbox) या स्पैम फ़ोल्डर चेक करें।';
+
+    try {
+      await sendPasswordResetEmail(auth, cleanEmail);
+      return { success: true, message: genericSuccessMsg };
+    } catch (err: any) {
+      console.warn('Password reset note:', err);
+      const errCode = err?.code || '';
+
+      // Security: Prevent Email Enumeration Attack
+      // If user-not-found, return the same generic success message so attackers cannot probe registered emails
+      if (errCode === 'auth/user-not-found') {
+        return { success: true, message: genericSuccessMsg };
+      }
+
+      let msg = 'पासवर्ड रीसेट लिंक भेजने में त्रुटि हुई।';
+      if (errCode === 'auth/invalid-email') {
+        msg = 'ईमेल का प्रारूप अमान्य है। कृपया सही ईमेल दर्ज करें।';
+      } else if (errCode === 'auth/too-many-requests') {
+        msg = 'बहुत अधिक अनुरोध किए गए हैं। कृपया कुछ समय प्रतीक्षा करें और पुनः प्रयास करें।';
+      } else if (errCode === 'auth/network-request-failed') {
+        msg = 'नेटवर्क कनेक्शन विफल रहा। कृपया अपना इंटरनेट कनेक्शन जांचें।';
+      } else {
+        msg = getHindiErrorMessage(err, 'पासवर्ड रीसेट ईमेल नहीं भेजा जा सका।');
+      }
+
+      setError(msg);
+      return { success: false, error: msg };
+    }
+  };
+
+  // 5. Logout
   const logout = async () => {
     try {
       await signOut(auth);
@@ -234,7 +302,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // 5. Explicit Demo guest mode (only entered when user taps the button)
+  // 6. Explicit Demo guest mode (only entered when user taps the button)
   const enterDemoMode = () => {
     setIsDemoMode(true);
     setError(null);
@@ -255,6 +323,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithEmail,
         signUpWithEmail,
         loginWithGoogle,
+        sendPasswordReset,
         logout,
         enterDemoMode,
         exitDemoMode,

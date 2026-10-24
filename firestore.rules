@@ -10,8 +10,19 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    function isAdmin() {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Admins registry: readable only by the verified admin, not writable from client
+    match /admins/{adminUid} {
+      allow read: if isAuthenticated() && request.auth.uid == adminUid;
+      allow write: if false;
+    }
+
     // User profiles: public fields readable by all for profiles and search
-    // Only the account owner can modify their profile details, or follow metrics can be updated
+    // Note: private email is isolated in users/{userId}/private/account
     match /users/{userId} {
       allow read: if true;
       allow create: if isOwner(userId);
@@ -20,6 +31,11 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount', 'followingCount'])
       );
       allow delete: if false;
+
+      // Private sensitive sub-collection: ONLY the authenticated owner can access
+      match /private/{docId} {
+        allow read, write: if isOwner(userId);
+      }
 
       // User notifications sub-collection
       // 1. Only recipient user can read, update (mark read), or delete their own notifications
@@ -51,14 +67,15 @@ service cloud.firestore {
 
     // Posts collection
     // 1. Anyone can read posts in the public Home Feed
-    // 2. Only authenticated users can create posts, and authorUid must match their real auth UID
-    // 3. Only the original author can edit post text/image, or other users can update like/comment metrics
-    // 4. Only the original author can delete their post
+    // 2. Regular post: authorUid matches auth.uid
+    // 3. Anonymous post: authorUid is masked to 'anonymous' and ownership is isolated in anonymous_post_ownership
+    // 4. Only original author or admin can delete post
     match /posts/{postId} {
       allow read: if true;
       allow create: if isAuthenticated() && (
         request.resource.data.authorUid == request.auth.uid ||
-        request.resource.data.authorId == request.auth.uid
+        request.resource.data.authorId == request.auth.uid ||
+        (request.resource.data.isAnonymous == true && request.resource.data.authorUid == 'anonymous')
       );
       allow update: if isAuthenticated() && (
         resource.data.authorUid == request.auth.uid ||
@@ -69,22 +86,63 @@ service cloud.firestore {
       );
       allow delete: if isAuthenticated() && (
         resource.data.authorUid == request.auth.uid ||
-        resource.data.authorId == request.auth.uid
+        resource.data.authorId == request.auth.uid ||
+        (exists(/databases/$(database)/documents/anonymous_post_ownership/$(postId)) &&
+         get(/databases/$(database)/documents/anonymous_post_ownership/$(postId)).data.realAuthorUid == request.auth.uid) ||
+        isAdmin()
       );
 
       // Comments sub-collection: posts/{postId}/comments/{commentId}
       // Publicly readable so everyone can read comments on public posts
-      // Creatable by any authenticated user; authorUid must match auth.uid
-      // Deletable by the comment author or the post owner
+      // Supports regular comments and masked anonymous comments
       match /comments/{commentId} {
         allow read: if true;
-        allow create: if isAuthenticated() && request.resource.data.authorUid == request.auth.uid;
+        allow create: if isAuthenticated() && (
+          request.resource.data.authorUid == request.auth.uid ||
+          (request.resource.data.isAnonymous == true && request.resource.data.authorUid == 'anonymous')
+        );
         allow delete: if isAuthenticated() && (
           resource.data.authorUid == request.auth.uid ||
-          get(/databases/$(database)/documents/posts/$(postId)).data.authorUid == request.auth.uid
+          get(/databases/$(database)/documents/posts/$(postId)).data.authorUid == request.auth.uid ||
+          (exists(/databases/$(database)/documents/anonymous_comment_ownership/$(commentId)) &&
+           get(/databases/$(database)/documents/anonymous_comment_ownership/$(commentId)).data.realAuthorUid == request.auth.uid) ||
+          isAdmin()
         );
         allow update: if false;
       }
+    }
+
+    // Isolated Anonymous Post Ownership
+    // Only the real author or an authorized admin can read or delete their ownership mapping
+    // Regular public users CANNOT read or query this collection
+    match /anonymous_post_ownership/{postId} {
+      allow read: if isAuthenticated() && (
+        resource.data.realAuthorUid == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && 
+        request.resource.data.realAuthorUid == request.auth.uid;
+      allow delete: if isAuthenticated() && (
+        resource.data.realAuthorUid == request.auth.uid ||
+        isAdmin()
+      );
+      allow update: if false;
+    }
+
+    // Isolated Anonymous Comment Ownership
+    // Only the real author or an authorized admin can read or delete their ownership mapping
+    match /anonymous_comment_ownership/{commentId} {
+      allow read: if isAuthenticated() && (
+        resource.data.realAuthorUid == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated() && 
+        request.resource.data.realAuthorUid == request.auth.uid;
+      allow delete: if isAuthenticated() && (
+        resource.data.realAuthorUid == request.auth.uid ||
+        isAdmin()
+      );
+      allow update: if false;
     }
 
     // Direct 1-on-1 Chats Collection
@@ -125,6 +183,73 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['learnersCount', 'learnerUids'])
       );
       allow delete: if isAuthenticated() && resource.data.authorUid == request.auth.uid;
+    }
+
+    // Anonymous Confession Posts Collection ('Dil Se' / 'Gupt')
+    // Legacy collection support with secure isolation
+    match /anonymous_posts/{postId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && (
+        request.resource.data.authorUid == request.auth.uid ||
+        request.resource.data.authorId == request.auth.uid ||
+        (request.resource.data.isAnonymous == true && request.resource.data.authorUid == 'anonymous')
+      );
+      allow update: if isAuthenticated() && (
+        resource.data.authorUid == request.auth.uid ||
+        resource.data.authorId == request.auth.uid ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'likeCount', 'likesCount', 'likedUserIds', 'likedBy', 'commentsCount', 'comments'
+        ])
+      );
+      allow delete: if isAuthenticated() && (
+        resource.data.authorUid == request.auth.uid ||
+        resource.data.authorId == request.auth.uid ||
+        (exists(/databases/$(database)/documents/anonymous_post_ownership/$(postId)) &&
+         get(/databases/$(database)/documents/anonymous_post_ownership/$(postId)).data.realAuthorUid == request.auth.uid) ||
+        isAdmin()
+      );
+
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if isAuthenticated() && (
+          request.resource.data.authorUid == request.auth.uid ||
+          (request.resource.data.isAnonymous == true && request.resource.data.authorUid == 'anonymous')
+        );
+        allow delete: if isAuthenticated() && (
+          resource.data.authorUid == request.auth.uid ||
+          get(/databases/$(database)/documents/anonymous_posts/$(postId)).data.authorUid == request.auth.uid ||
+          (exists(/databases/$(database)/documents/anonymous_comment_ownership/$(commentId)) &&
+           get(/databases/$(database)/documents/anonymous_comment_ownership/$(commentId)).data.realAuthorUid == request.auth.uid) ||
+          isAdmin()
+        );
+        allow update: if false;
+      }
+    }
+
+    // Reports Collection: Moderation & Safety
+    // 1. Any authenticated user can submit a report against spam, abuse, or policy violations
+    // 2. Only authorized admins can read, review, resolve, or delete reports
+    match /reports/{reportId} {
+      allow create: if isAuthenticated() && (
+        request.resource.data.reporterUid == request.auth.uid ||
+        request.resource.data.reporterUser.id == request.auth.uid
+      );
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Unique Usernames Registry
+    // 1. Readable publicly to check availability and map usernames
+    // 2. Creatable only if not already claimed by someone else and uid matches caller
+    // 3. Deletable or updatable only by the username owner
+    match /usernames/{username} {
+      allow read: if true;
+      allow create: if isAuthenticated() && 
+        request.resource.data.uid == request.auth.uid &&
+        !exists(/databases/$(database)/documents/usernames/$(username));
+      allow update: if isAuthenticated() && 
+        resource.data.uid == request.auth.uid && 
+        request.resource.data.uid == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.uid == request.auth.uid;
     }
 
     // Connection testing

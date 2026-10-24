@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "BharatConnect — Apna Desh, Apna Network",
+  "short_name": "BharatConnect",
+  "description": "भारत का अपना सोशल मीडिया प्लेटफॉर्म। कनेक्ट करें, बनाएं और शेयर करें।",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#020617",
+  "theme_color": "#ea580c",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

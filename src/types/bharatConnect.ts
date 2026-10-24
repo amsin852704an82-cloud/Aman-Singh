@@ -1,6 +1,19 @@
 export type LanguageCode = 'hi' | 'en' | 'gu' | 'mr' | 'ta' | 'bn';
 
-export type MainTab = 'home' | 'hunar' | 'reels' | 'create' | 'search' | 'notifications' | 'profile' | 'admin';
+export type MainTab = 
+  | 'landing' 
+  | 'home' 
+  | 'hunar' 
+  | 'reels' 
+  | 'create' 
+  | 'search' 
+  | 'notifications' 
+  | 'profile' 
+  | 'admin'
+  | 'groups'
+  | 'events'
+  | 'marketplace'
+  | 'creator';
 
 export interface User {
   id: string;
@@ -66,6 +79,7 @@ export interface Post {
   audioDuration?: number | string;
   mediaType?: 'image' | 'audio' | 'text';
   audioTitle?: string;
+  isAnonymous?: boolean;
 }
 
 export interface Story {
@@ -172,4 +186,60 @@ export interface HunarPost {
   learnerUids?: string[];
   location: string;
   createdAt: string;
+}
+
+export interface CommunityGroup {
+  id: string;
+  name: string;
+  description: string;
+  category: 'tech' | 'culture' | 'food' | 'business' | 'sports' | 'regional' | 'arts';
+  memberCount: number;
+  isPrivate: boolean;
+  avatar: string;
+  coverImage: string;
+  tags: string[];
+  isJoined?: boolean;
+  recentActivity: string;
+}
+
+export interface CommunityEvent {
+  id: string;
+  title: string;
+  description: string;
+  date: string;
+  time: string;
+  location: string;
+  isOnline: boolean;
+  category: 'festival' | 'tech' | 'music' | 'startup' | 'literature';
+  bannerUrl: string;
+  attendeesCount: number;
+  isRsvpd?: boolean;
+  organizer: string;
+}
+
+export interface MarketplaceProduct {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+  originalPrice?: number;
+  category: 'handloom' | 'tea_spices' | 'handicrafts' | 'footwear' | 'art';
+  location: string;
+  sellerName: string;
+  sellerHandle: string;
+  sellerAvatar: string;
+  images: string[];
+  verifiedSeller: boolean;
+  whatsappNumber: string;
+  inStock: boolean;
+}
+
+export interface CreatorStats {
+  impressions: number;
+  reach: number;
+  profileViews: number;
+  followerGrowthPercent: number;
+  engagementRate: number;
+  estimatedEarningsINR: number;
+  bestTimeToPost: string;
 }

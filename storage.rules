@@ -13,6 +13,16 @@ service firebase.storage {
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
+    // Voice / Audio clips (Bharat Awaaz & Shayari recordings)
+    match /audio/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null 
+                   && request.auth.uid == userId
+                   && request.resource.size < 15 * 1024 * 1024
+                   && request.resource.contentType.matches('audio/.*');
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
     // User profile avatars
     match /avatars/{userId}/{fileName} {
       allow read: if true;
@@ -21,6 +31,16 @@ service firebase.storage {
                    && request.resource.size < 5 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*');
       allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Anonymous Media (Photos & Audio for 'Dil Se' Anonymous Posts)
+    // Completely isolates and scrubs author identity from Storage file path and metadata
+    match /anonymous_media/{fileName} {
+      allow read: if true;
+      allow create: if request.auth != null 
+                    && request.resource.size < 15 * 1024 * 1024
+                    && (request.resource.contentType.matches('image/.*') || request.resource.contentType.matches('audio/.*'));
+      allow update, delete: if request.auth != null;
     }
   }
 }

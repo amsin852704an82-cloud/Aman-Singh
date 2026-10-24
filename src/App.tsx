@@ -16,14 +16,32 @@ import { SearchView } from './components/bharatConnect/SearchView';
 import { NotificationsView } from './components/bharatConnect/NotificationsView';
 import { ProfileView } from './components/bharatConnect/ProfileView';
 import { AdminView } from './components/bharatConnect/AdminView';
+import { GroupsView } from './components/bharatConnect/GroupsView';
+import { EventsView } from './components/bharatConnect/EventsView';
+import { MarketplaceView } from './components/bharatConnect/MarketplaceView';
+import { CreatorView } from './components/bharatConnect/CreatorView';
 import { LoginPage } from './components/bharatConnect/LoginPage';
 import { AuthModal } from './components/bharatConnect/AuthModal';
 import { UserProfileModal } from './components/bharatConnect/UserProfileModal';
+import { LandingPageView } from './components/bharatConnect/LandingPageView';
 import { CheckCircle2, Loader2, Sparkles } from 'lucide-react';
+import { initGoogleAnalytics, trackPageView } from './lib/analytics';
 
 const BharatConnectContent: React.FC = () => {
   const { activeTab, isPhoneFrame, toastMessage, viewingUser, setViewingUser } = useBharatConnect();
   const { user, isDemoMode, loading } = useAuth();
+
+  // Initialize Google Analytics 4
+  React.useEffect(() => {
+    initGoogleAnalytics();
+  }, []);
+
+  // Track page_view whenever active tab changes
+  React.useEffect(() => {
+    if (activeTab) {
+      trackPageView(`/${activeTab}`, `BharatConnect — ${activeTab.toUpperCase()}`);
+    }
+  }, [activeTab]);
 
   // If loading auth state from Firebase
   if (loading) {
@@ -41,6 +59,22 @@ const BharatConnectContent: React.FC = () => {
           <span>BharatConnect लोड हो रहा है...</span>
         </div>
       </div>
+    );
+  }
+
+  // If activeTab is explicitly landing page, render the full Landing Page
+  if (activeTab === 'landing') {
+    return (
+      <>
+        <LandingPageView />
+        <AuthModal />
+        {toastMessage && (
+          <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-2.5 bg-slate-900/95 border border-orange-500/50 rounded-2xl shadow-2xl backdrop-blur-md text-xs text-slate-100 animate-in fade-in slide-in-from-top-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span className="font-medium">{toastMessage}</span>
+          </div>
+        )}
+      </>
     );
   }
 
@@ -67,6 +101,14 @@ const BharatConnectContent: React.FC = () => {
         return <ProfileView />;
       case 'admin':
         return <AdminView />;
+      case 'groups':
+        return <GroupsView />;
+      case 'events':
+        return <EventsView />;
+      case 'marketplace':
+        return <MarketplaceView />;
+      case 'creator':
+        return <CreatorView />;
       default:
         return <HomeFeed />;
     }

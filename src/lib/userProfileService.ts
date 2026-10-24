@@ -8,6 +8,7 @@ import {
   OperationType, 
   FirebaseUser 
 } from './firebase';
+import { claimUsernameTransaction } from './usernameService';
 import { User } from '../types/bharatConnect';
 
 export interface UserProfileFirestoreData {
@@ -63,6 +64,21 @@ export async function saveOrUpdateUserProfile(
     const effectivePhotoURL = user.photoURL || defaultAvatar;
     const effectiveName = user.displayName || extra?.name || (user.email ? user.email.split('@')[0] : 'भारत नागरिक');
 
+    // Securely store user's private email in private sub-collection: users/{uid}/private/account
+    // This strictly isolates PII so only the account owner (request.auth.uid == userId) can read it
+    if (user.email) {
+      try {
+        const privateAccountRef = doc(db, 'users', user.uid, 'private', 'account');
+        await setDoc(privateAccountRef, {
+          email: user.email,
+          uid: user.uid,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (privErr) {
+        console.warn('Private account subcollection save note:', privErr);
+      }
+    }
+
     if (docSnap.exists()) {
       const data = docSnap.data();
       const updates: Record<string, any> = {};
@@ -70,7 +86,6 @@ export async function saveOrUpdateUserProfile(
       // Preserve existing user fields; only update missing or newly provided essential fields
       if (!data.uid) updates.uid = user.uid;
       if (!data.id) updates.id = user.uid;
-      if (!data.email && user.email) updates.email = user.email;
       if (!data.name && effectiveName) updates.name = effectiveName;
       if (!data.fullName && effectiveName) updates.fullName = effectiveName;
       if (!data.photoURL && user.photoURL) updates.photoURL = user.photoURL;
@@ -96,7 +111,7 @@ export async function saveOrUpdateUserProfile(
         username: mergedData.username || cleanUsername,
         name: mergedData.name || mergedData.fullName || effectiveName,
         fullName: mergedData.fullName || mergedData.name || effectiveName,
-        email: mergedData.email || user.email || '',
+        email: user.email || '', // available only to the authenticated session
         photoURL: mergedData.photoURL || mergedData.avatar || effectivePhotoURL,
         avatar: mergedData.avatar || mergedData.photoURL || effectivePhotoURL,
         handle: mergedData.handle || `@${cleanUsername}`,
@@ -111,13 +126,12 @@ export async function saveOrUpdateUserProfile(
         updatedAt: mergedData.updatedAt || new Date().toISOString()
       };
     } else {
-      // Document does not exist yet -> Create new profile in users collection
-      const newProfile: UserProfileFirestoreData & { id: string } = {
+      // Document does not exist yet -> Create new public profile in users collection (without exposing email in public doc)
+      const newProfile: Omit<UserProfileFirestoreData, 'email'> & { id: string } = {
         uid: user.uid,
         id: user.uid,
         name: effectiveName,
         fullName: effectiveName,
-        email: user.email || '',
         photoURL: effectivePhotoURL,
         avatar: effectivePhotoURL,
         username: cleanUsername,
@@ -139,13 +153,67 @@ export async function saveOrUpdateUserProfile(
         throw createErr;
       }
 
+      // Claim username document for uniqueness
+      try {
+        await claimUsernameTransaction(cleanUsername, user.uid);
+      } catch (claimErr) {
+        console.warn('Username reservation note:', claimErr);
+      }
+
       return {
         ...newProfile,
+        email: user.email || '',
         language: 'hi'
       };
     }
   } catch (error) {
     console.error('saveOrUpdateUserProfile error:', error);
     throw error;
+  }
+}
+
+/**
+ * Updates user profile details in Firestore with strict username uniqueness enforcement.
+ */
+export async function updateUserProfileDetails(
+  uid: string,
+  updates: { fullName?: string; bio?: string; location?: string; avatar?: string; username?: string },
+  currentUsername?: string
+): Promise<{ success: boolean; error?: string; cleanUsername?: string }> {
+  try {
+    const userDocRef = doc(db, 'users', uid);
+    let finalUsername = currentUsername;
+
+    if (updates.username && updates.username !== currentUsername) {
+      const claimResult = await claimUsernameTransaction(updates.username, uid, currentUsername);
+      if (!claimResult.success) {
+        return { success: false, error: claimResult.error };
+      }
+      finalUsername = claimResult.cleanUsername;
+    }
+
+    const docUpdates: Record<string, any> = {
+      updatedAt: new Date().toISOString()
+    };
+    if (updates.fullName !== undefined) {
+      docUpdates.fullName = updates.fullName;
+      docUpdates.name = updates.fullName;
+    }
+    if (updates.bio !== undefined) docUpdates.bio = updates.bio;
+    if (updates.location !== undefined) docUpdates.location = updates.location;
+    if (updates.avatar !== undefined) {
+      docUpdates.avatar = updates.avatar;
+      docUpdates.photoURL = updates.avatar;
+    }
+    if (finalUsername) {
+      docUpdates.username = finalUsername;
+      docUpdates.handle = `@${finalUsername}`;
+    }
+
+    await updateDoc(userDocRef, docUpdates);
+    return { success: true, cleanUsername: finalUsername };
+  } catch (err: any) {
+    console.error('updateUserProfileDetails error:', err);
+    return { success: false, error: err?.message || 'प्रोफाइल अपडेट करने में त्रुटि हुई।' };
   }
 }

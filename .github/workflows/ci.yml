@@ -1,0 +1,44 @@
+name: BharatConnect CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality-and-security:
+    name: Lint, Typecheck, Security Gates (26/26) & Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: 📥 Check out repository code
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Set up Node.js 20.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: 📦 Install dependencies with legacy peer deps
+        run: npm ci --legacy-peer-deps
+
+      - name: 🛡️ Run lint check
+        run: npm run lint
+
+      - name: 🔍 TypeScript Static Type Checking
+        run: npx tsc --noEmit
+
+      - name: 🔒 Execute BharatConnect Security & Auth Verification Suite (26/26)
+        run: npx tsx tests/security_and_auth_suite.ts
+
+      - name: 🏗️ Verify production build (SPA + Server bundle)
+        run: npm run build
+
+# TODO: Deploy step बाद में add करना — Vercel webhook + Railway webhook

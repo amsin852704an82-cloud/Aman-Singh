@@ -1,13 +1,35 @@
 import React from 'react';
 import { useBharatConnect } from '../../context/BharatConnectContext';
 import { LanguageCode } from '../../types/bharatConnect';
-import { Globe, Shield, Smartphone, Monitor, LogIn, UserCheck, Bell, MessageSquare } from 'lucide-react';
+import { 
+  Globe, 
+  Shield, 
+  Smartphone, 
+  Monitor, 
+  LogIn, 
+  UserCheck, 
+  Bell, 
+  MessageSquare, 
+  Sun, 
+  Moon, 
+  Compass,
+  Home,
+  GraduationCap,
+  Clapperboard,
+  Users,
+  Calendar,
+  ShoppingBag,
+  BarChart3,
+  Search
+} from 'lucide-react';
 import { InboxModal } from './InboxModal';
 
 export const Navbar: React.FC = () => {
   const { 
     language, 
     setLanguage, 
+    theme,
+    toggleTheme,
     t, 
     activeTab, 
     setActiveTab, 
@@ -64,7 +86,29 @@ export const Navbar: React.FC = () => {
         </div>
 
         {/* Right: Controls & Language */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Landing Page Link */}
+          <button
+            onClick={() => setActiveTab('landing')}
+            className={`p-2 rounded-lg border transition-colors cursor-pointer min-h-[38px] min-w-[38px] flex items-center justify-center ${
+              activeTab === 'landing'
+                ? 'bg-orange-500/20 border-orange-500/50 text-orange-400'
+                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+            }`}
+            title="लैंडिंग पेज / Landing Page"
+          >
+            <Compass className="w-4 h-4 text-orange-400" />
+          </button>
+
+          {/* Theme Toggle Button */}
+          <button
+            onClick={toggleTheme}
+            className="p-2 rounded-lg border bg-slate-900 border-slate-800 text-amber-400 hover:text-amber-300 transition-colors cursor-pointer min-h-[38px] min-w-[38px] flex items-center justify-center"
+            title={theme === 'dark' ? 'लाइट थीम चालू करें' : 'डार्क थीम चालू करें'}
+          >
+            {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
+
           {/* Language Selector */}
           <div className="relative flex items-center">
             <Globe className="w-3.5 h-3.5 text-slate-400 absolute left-2 pointer-events-none" />
@@ -173,6 +217,105 @@ export const Navbar: React.FC = () => {
             )}
           </button>
         </div>
+      </div>
+
+      {/* Module Sub-Navigation Bar */}
+      <div className="max-w-5xl mx-auto flex items-center gap-1.5 overflow-x-auto pt-2 pb-0.5 scrollbar-none">
+        <button
+          onClick={() => setActiveTab('home')}
+          className={`px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition active:scale-95 cursor-pointer ${
+            activeTab === 'home'
+              ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
+              : 'bg-slate-900/80 border border-slate-800 text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          <Home className="w-3.5 h-3.5" />
+          <span>होम</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('reels')}
+          className={`px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition active:scale-95 cursor-pointer ${
+            activeTab === 'reels'
+              ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
+              : 'bg-slate-900/80 border border-slate-800 text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          <Clapperboard className="w-3.5 h-3.5" />
+          <span>रील्स</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('hunar')}
+          className={`px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition active:scale-95 cursor-pointer ${
+            activeTab === 'hunar'
+              ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
+              : 'bg-slate-900/80 border border-slate-800 text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          <GraduationCap className="w-3.5 h-3.5" />
+          <span>हुनर (Skills)</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('groups')}
+          className={`px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition active:scale-95 cursor-pointer ${
+            activeTab === 'groups'
+              ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
+              : 'bg-slate-900/80 border border-slate-800 text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          <Users className="w-3.5 h-3.5" />
+          <span>समूह (Groups)</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('events')}
+          className={`px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition active:scale-95 cursor-pointer ${
+            activeTab === 'events'
+              ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
+              : 'bg-slate-900/80 border border-slate-800 text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          <Calendar className="w-3.5 h-3.5" />
+          <span>उत्सव व मेले (Events)</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('marketplace')}
+          className={`px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition active:scale-95 cursor-pointer ${
+            activeTab === 'marketplace'
+              ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
+              : 'bg-slate-900/80 border border-slate-800 text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          <ShoppingBag className="w-3.5 h-3.5" />
+          <span>देसी हाट</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('creator')}
+          className={`px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition active:scale-95 cursor-pointer ${
+            activeTab === 'creator'
+              ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
+              : 'bg-slate-900/80 border border-slate-800 text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          <BarChart3 className="w-3.5 h-3.5" />
+          <span>स्टूडियो</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('search')}
+          className={`px-3 py-1 rounded-xl text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition active:scale-95 cursor-pointer ${
+            activeTab === 'search'
+              ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
+              : 'bg-slate-900/80 border border-slate-800 text-slate-300 hover:bg-slate-800'
+          }`}
+        >
+          <Search className="w-3.5 h-3.5" />
+          <span>खोजें</span>
+        </button>
       </div>
 
       {/* Direct Messaging Inbox Modal */}

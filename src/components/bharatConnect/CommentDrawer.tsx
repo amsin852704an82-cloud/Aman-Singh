@@ -77,10 +77,15 @@ export const CommentDrawer: React.FC<CommentDrawerProps> = ({ post, onClose }) =
         {/* Header */}
         <div className="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-900/90">
           <div className="flex items-center gap-2">
-            <MessageCircle className="w-4 h-4 text-orange-400" />
+            <MessageCircle className={`w-4 h-4 ${post.isAnonymous ? 'text-purple-400' : 'text-orange-400'}`} />
             <h3 className="font-bold text-sm text-white">
               {t.comments} ({displayedComments.length})
             </h3>
+            {post.isAnonymous && (
+              <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[10px] font-bold">
+                🔒 दिल से स्पेस
+              </span>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -91,6 +96,16 @@ export const CommentDrawer: React.FC<CommentDrawerProps> = ({ post, onClose }) =
           </button>
         </div>
 
+        {/* Anonymous Post Safe Space Banner */}
+        {post.isAnonymous && (
+          <div className="px-4 py-2 bg-purple-950/40 border-b border-purple-500/20 text-purple-200 text-[11px] flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse shrink-0" />
+            <span>
+              <strong>दिल से सेफ स्पेस:</strong> इस पोस्ट पर सभी कमेंट्स अनाम (Anonymous) रूप से दिखाए जाते हैं।
+            </span>
+          </div>
+        )}
+
         {/* Comments Scrollable Body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4 max-h-96 min-h-[220px]">
           {displayedComments.length === 0 ? (
@@ -99,9 +114,14 @@ export const CommentDrawer: React.FC<CommentDrawerProps> = ({ post, onClose }) =
               <p>अभी कोई टिप्पणी नहीं है। पहली टिप्पणी लिखें!</p>
             </div>
           ) : (
-            displayedComments.map((comment) => {
-              const authorAvatar = comment.author?.photoURL || comment.author?.avatar || comment.authorAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80';
-              const authorName = comment.author?.fullName || comment.author?.name || comment.authorName || 'भारत नागरिक';
+            displayedComments.map((comment, index) => {
+              const isAnonymousPost = post.isAnonymous;
+              const authorAvatar = isAnonymousPost
+                ? 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=100&auto=format&fit=crop&q=80'
+                : (comment.author?.photoURL || comment.author?.avatar || comment.authorAvatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80');
+              const authorName = isAnonymousPost
+                ? `अनाम साथी #${(index % 9) + 1}`
+                : (comment.author?.fullName || comment.author?.name || comment.authorName || 'भारत नागरिक');
               const isMyComment = comment.authorUid === currentUid || comment.author?.id === currentUid;
 
               return (
@@ -109,12 +129,14 @@ export const CommentDrawer: React.FC<CommentDrawerProps> = ({ post, onClose }) =
                   <img
                     src={authorAvatar}
                     alt={authorName}
-                    className="w-8 h-8 rounded-full object-cover shrink-0 border border-slate-700"
+                    className={`w-8 h-8 rounded-full object-cover shrink-0 border ${
+                      isAnonymousPost ? 'border-purple-400/60 bg-purple-950/50' : 'border-slate-700'
+                    }`}
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-semibold text-white">{authorName}</span>
+                        <span className={`font-semibold ${isAnonymousPost ? 'text-purple-300' : 'text-white'}`}>{authorName}</span>
                         <span className="text-[10px] text-slate-500 font-mono">{comment.createdAt}</span>
                       </div>
 
@@ -139,22 +161,36 @@ export const CommentDrawer: React.FC<CommentDrawerProps> = ({ post, onClose }) =
         {/* Input Bar */}
         <form onSubmit={handleSubmit} className="p-3 bg-slate-950 border-t border-slate-800 flex items-center gap-2">
           <img
-            src={currentUser.photoURL || currentUser.avatar}
-            alt={currentUser.fullName || currentUser.name}
-            className="w-8 h-8 rounded-full object-cover shrink-0 border border-orange-500/40"
+            src={
+              post.isAnonymous 
+                ? 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=100&auto=format&fit=crop&q=80' 
+                : (currentUser.photoURL || currentUser.avatar)
+            }
+            alt={post.isAnonymous ? 'अनाम' : (currentUser.fullName || currentUser.name)}
+            className={`w-8 h-8 rounded-full object-cover shrink-0 border ${
+              post.isAnonymous ? 'border-purple-400/60' : 'border-orange-500/40'
+            }`}
           />
           <input
             type="text"
             value={commentText}
             onChange={(e) => setCommentText(e.target.value)}
-            placeholder={isFirebaseAuthLoggedIn ? t.writeComment : 'कमेंट करने के लिए लॉगिन करें...'}
+            placeholder={
+              post.isAnonymous 
+                ? 'अनाम रूप से सांत्वना या विचार लिखें...' 
+                : (isFirebaseAuthLoggedIn ? t.writeComment : 'कमेंट करने के लिए लॉगिन करें...')
+            }
             disabled={isSubmitting}
             className="flex-1 bg-slate-900 text-xs text-slate-200 px-3.5 py-2.5 rounded-full border border-slate-800 focus:outline-none focus:border-orange-500 placeholder-slate-500"
           />
           <button
             type="submit"
             disabled={!commentText.trim() || isSubmitting}
-            className="w-9 h-9 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 disabled:from-slate-800 disabled:to-slate-800 text-white disabled:text-slate-600 flex items-center justify-center transition shadow-md active:scale-95 cursor-pointer shrink-0"
+            className={`w-9 h-9 rounded-full ${
+              post.isAnonymous 
+                ? 'bg-gradient-to-r from-purple-600 to-indigo-600' 
+                : 'bg-gradient-to-r from-orange-500 to-amber-500'
+            } disabled:from-slate-800 disabled:to-slate-800 text-white disabled:text-slate-600 flex items-center justify-center transition shadow-md active:scale-95 cursor-pointer shrink-0`}
           >
             {isSubmitting ? (
               <Loader2 className="w-4 h-4 animate-spin text-white" />

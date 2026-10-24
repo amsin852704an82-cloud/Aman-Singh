@@ -340,22 +340,37 @@ export const HomeFeed: React.FC = () => {
                     {/* Post Header */}
                     <div className="p-3.5 flex items-center justify-between">
                       <div 
-                        onClick={() => post.author && openUserProfile(post.author)}
-                        className="flex items-center gap-2.5 cursor-pointer group"
-                        title="प्रोफ़ाइल देखें (View Profile)"
+                        onClick={() => {
+                          if (!post.isAnonymous && post.author) {
+                            openUserProfile(post.author);
+                          }
+                        }}
+                        className={`flex items-center gap-2.5 ${post.isAnonymous ? 'cursor-default' : 'cursor-pointer group'}`}
+                        title={post.isAnonymous ? 'दिल से / गुप्त पोस्ट (Anonymous)' : 'प्रोफ़ाइल देखें (View Profile)'}
                       >
                         <img
                           src={authorAvatar}
                           alt={authorName}
-                          className="w-9 h-9 rounded-full object-cover border border-slate-700 group-hover:border-orange-500/60 transition"
+                          className={`w-9 h-9 rounded-full object-cover border transition ${
+                            post.isAnonymous 
+                              ? 'border-purple-400/80 bg-purple-950/50' 
+                              : 'border-slate-700 group-hover:border-orange-500/60'
+                          }`}
                         />
                         <div>
-                          <div className="flex items-center gap-1">
-                            <span className="font-bold text-xs text-white group-hover:text-orange-400 transition">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`font-bold text-xs ${post.isAnonymous ? 'text-purple-300' : 'text-white group-hover:text-orange-400 transition'}`}>
                               {authorName}
                             </span>
-                            {post.author?.verified && (
-                              <CheckCircle2 className="w-3.5 h-3.5 text-orange-400 fill-orange-400/20" />
+                            {post.isAnonymous ? (
+                              <span className="px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[9px] font-bold flex items-center gap-0.5">
+                                <span>🔒</span>
+                                <span>दिल से</span>
+                              </span>
+                            ) : (
+                              post.author?.verified && (
+                                <CheckCircle2 className="w-3.5 h-3.5 text-orange-400 fill-orange-400/20" />
+                              )
                             )}
                             <span className="text-[11px] text-slate-400 font-normal">
                               {authorHandle}

@@ -17,10 +17,13 @@ import {
   Flame,
   ShieldCheck,
   Mic,
-  Music
+  Music,
+  Loader2,
+  Check
 } from 'lucide-react';
 import { Post } from '../../types/bharatConnect';
 import { subscribeToUserFollowers } from '../../lib/followService';
+import { checkUsernameAvailability, validateUsernameFormat } from '../../lib/usernameService';
 
 const AVATAR_PRESETS = [
   'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80',
@@ -50,12 +53,50 @@ export const ProfileView: React.FC = () => {
 
   // Edit form state
   const [name, setName] = useState(currentUser.fullName);
+  const [editUsername, setEditUsername] = useState(currentUser.username);
   const [bio, setBio] = useState(currentUser.bio);
   const [location, setLocation] = useState(currentUser.location);
   const [avatar, setAvatar] = useState(currentUser.avatar);
+  const [isSaving, setIsSaving] = useState(false);
+  const [usernameCheck, setUsernameCheck] = useState<{ checking: boolean; available?: boolean; message?: string }>({ checking: false });
 
   const myPosts = posts.filter((p) => p.author.id === currentUser.id);
   const savedPosts = posts.filter((p) => p.isSaved);
+
+  // Sync edit form with currentUser when opened
+  useEffect(() => {
+    if (isEditing) {
+      setName(currentUser.fullName);
+      setEditUsername(currentUser.username);
+      setBio(currentUser.bio);
+      setLocation(currentUser.location);
+      setAvatar(currentUser.avatar);
+      setUsernameCheck({ checking: false });
+    }
+  }, [isEditing, currentUser]);
+
+  // Check username availability when user changes username in edit profile
+  useEffect(() => {
+    if (!isEditing || !editUsername.trim() || editUsername.toLowerCase().trim() === currentUser.username.toLowerCase()) {
+      setUsernameCheck({ checking: false });
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      const val = validateUsernameFormat(editUsername);
+      if (!val.valid) {
+        setUsernameCheck({ checking: false, available: false, message: val.error });
+        return;
+      }
+
+      setUsernameCheck({ checking: true });
+      const currentUid = currentUser.uid || currentUser.id;
+      const res = await checkUsernameAvailability(val.cleanUsername, currentUid);
+      setUsernameCheck({ checking: false, available: res.available, message: res.message });
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [editUsername, isEditing, currentUser]);
 
   // Subscribe to live followers for current user in Firestore
   useEffect(() => {
@@ -76,10 +117,15 @@ export const ProfileView: React.FC = () => {
     }
   }, [currentUser.followersCount]);
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateProfile(name, bio, location, avatar);
-    setIsEditing(false);
+    if (usernameCheck.available === false) return;
+    setIsSaving(true);
+    const success = await updateProfile(name, bio, location, avatar, editUsername);
+    setIsSaving(false);
+    if (success !== false) {
+      setIsEditing(false);
+    }
   };
 
   return (
@@ -401,6 +447,49 @@ export const ProfileView: React.FC = () => {
                 />
               </div>
 
+              {/* Unique Username Handle */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-slate-300">
+                    यूज़रनेम (Unique Handle)
+                  </label>
+                  {editUsername.trim().toLowerCase() !== currentUser.username.toLowerCase() && (
+                    <span className="text-[10px] flex items-center gap-1">
+                      {usernameCheck.checking ? (
+                        <span className="text-slate-400 flex items-center gap-1">
+                          <Loader2 className="w-3 h-3 animate-spin" /> जाँच...
+                        </span>
+                      ) : usernameCheck.available ? (
+                        <span className="text-emerald-400 font-semibold flex items-center gap-0.5">
+                          <Check className="w-3 h-3" /> उपलब्ध है
+                        </span>
+                      ) : usernameCheck.message ? (
+                        <span className="text-rose-400 font-medium">अनुपलब्ध</span>
+                      ) : null}
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <span className="text-slate-500 font-bold text-xs absolute left-3 top-1/2 -translate-y-1/2">@</span>
+                  <input
+                    type="text"
+                    value={editUsername}
+                    onChange={(e) => setEditUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                    className={`w-full bg-slate-950 border rounded-xl pl-7 pr-3 py-2 text-xs text-white focus:outline-none transition ${
+                      usernameCheck.available === false
+                        ? 'border-rose-500/60'
+                        : usernameCheck.available === true
+                        ? 'border-emerald-500/60'
+                        : 'border-slate-800 focus:border-orange-500'
+                    }`}
+                    required
+                  />
+                </div>
+                {usernameCheck.message && !usernameCheck.available && (
+                  <p className="text-[10px] text-rose-400 mt-1">{usernameCheck.message}</p>
+                )}
+              </div>
+
               {/* Bio */}
               <div>
                 <label className="text-xs font-semibold text-slate-300 block mb-1">
@@ -432,15 +521,24 @@ export const ProfileView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsEditing(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition"
+                  disabled={isSaving}
+                  className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition disabled:opacity-50"
                 >
                   {t.cancel}
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition shadow-md"
+                  disabled={isSaving || usernameCheck.available === false}
+                  className="flex-1 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                  {t.saveChanges}
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin text-white" />
+                      <span>सहेज रहे हैं...</span>
+                    </>
+                  ) : (
+                    <span>{t.saveChanges}</span>
+                  )}
                 </button>
               </div>
             </form>

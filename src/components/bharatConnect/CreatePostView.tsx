@@ -19,7 +19,8 @@ import {
   Link2,
   FolderOpen,
   ArrowRight,
-  Mic
+  Mic,
+  RotateCw
 } from 'lucide-react';
 import { AwaazRecordModal } from './AwaazRecordModal';
 
@@ -99,6 +100,7 @@ export const CreatePostView: React.FC = () => {
   const [location, setLocation] = useState(currentUser.location || 'New Delhi, India');
   const [selectedTags, setSelectedTags] = useState<string[]>(['BharatConnect', 'DesiVibes']);
   const [customUrlInput, setCustomUrlInput] = useState('');
+  const [isAnonymous, setIsAnonymous] = useState(false);
   
   // File inputs ref
   const galleryInputRef = useRef<HTMLInputElement>(null);
@@ -203,9 +205,9 @@ export const CreatePostView: React.FC = () => {
     setErrorMessage(null);
     setIsPublishing(true);
     try {
-      await createPost(caption, '', location, selectedTags);
+      await createPost(caption, '', location, selectedTags, undefined, isAnonymous);
       setIsPublishing(false);
-      setSuccessNotice('आपकी टेक्स्ट पोस्ट Firestore में प्रकाशित हो गई!');
+      setSuccessNotice(isAnonymous ? 'आपकी गुमनाम पोस्ट प्रकाशित हो गई!' : 'आपकी टेक्स्ट पोस्ट Firestore में प्रकाशित हो गई!');
     } catch (err: any) {
       setIsPublishing(false);
       setErrorMessage(err?.message || 'पोस्ट प्रकाशित करने में त्रुटि हुई।');
@@ -238,9 +240,13 @@ export const CreatePostView: React.FC = () => {
         setIsUploading(true);
         setUploadProgress(5);
         try {
-          finalImageUrl = await uploadPostImage(selectedFile, (progress) => {
-            setUploadProgress(progress);
-          });
+          finalImageUrl = await uploadPostImage(
+            selectedFile, 
+            (progress) => {
+              setUploadProgress(progress);
+            },
+            isAnonymous
+          );
         } catch (uploadErr: any) {
           setIsUploading(false);
           setIsPublishing(false);
@@ -253,12 +259,12 @@ export const CreatePostView: React.FC = () => {
         finalImageUrl = selectedImage;
       }
 
-      // 2. Save post document to Firestore
-      await createPost(caption, finalImageUrl, location, selectedTags);
+      // 2. Save post document to Firestore (posts & anonymous_posts)
+      await createPost(caption, finalImageUrl, location, selectedTags, undefined, isAnonymous);
       setCaption('');
       handleRemoveImage();
       setIsPublishing(false);
-      setSuccessNotice('आपकी पोस्ट सफलतापूर्वक Firestore में प्रकाशित हो गई!');
+      setSuccessNotice(isAnonymous ? 'आपकी गुमनाम (दिल से) पोस्ट Firestore में प्रकाशित हो गई!' : 'आपकी पोस्ट सफलतापूर्वक Firestore में प्रकाशित हो गई!');
       setActiveTab('home');
     } catch (err: any) {
       setIsPublishing(false);
@@ -371,21 +377,30 @@ export const CreatePostView: React.FC = () => {
             </button>
           </div>
 
-          {/* Quick fallback button if text exists */}
-          {caption.trim() && (
-            <div className="pt-2 border-t border-rose-500/20 flex flex-wrap items-center gap-2">
-              <span className="text-[10px] text-rose-300">त्वरित समाधान:</span>
+          {/* Retry Button and Fallback options */}
+          <div className="pt-2 border-t border-rose-500/20 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={(e) => handleSubmit(e as any)}
+              disabled={isUploading || isPublishing}
+              className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-semibold text-xs transition flex items-center gap-1.5 shadow-md active:scale-95 cursor-pointer disabled:opacity-50"
+            >
+              <RotateCw className="w-3.5 h-3.5" />
+              <span>पुनः प्रयास करें (Retry Upload)</span>
+            </button>
+
+            {caption.trim() && (
               <button
                 type="button"
                 onClick={handlePublishWithoutPhoto}
                 disabled={isPublishing}
-                className="px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white font-semibold text-[11px] transition flex items-center gap-1 shadow-sm active:scale-95"
+                className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-[11px] transition flex items-center gap-1 active:scale-95 cursor-pointer disabled:opacity-50"
               >
-                <span>केवल टेक्स्ट पोस्ट के रूप में अभी प्रकाशित करें</span>
+                <span>बिना फ़ोटो के टेक्स्ट पोस्ट करें</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
 
@@ -398,26 +413,102 @@ export const CreatePostView: React.FC = () => {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Creator Info Card */}
-        <div className="flex items-center gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-800/80">
+        {/* 'दिल से' / Anonymous Post Toggle Switch */}
+        <div className={`p-4 rounded-2xl border transition-all duration-300 ${
+          isAnonymous 
+            ? 'bg-purple-950/40 border-purple-500/50 shadow-lg shadow-purple-950/30' 
+            : 'bg-slate-900/60 border-slate-800'
+        }`}>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                isAnonymous 
+                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/40' 
+                  : 'bg-slate-800 text-slate-400 border border-slate-700/60'
+              }`}>
+                <Lock className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-white tracking-wide">
+                    गुमनाम पोस्ट करें (Post Anonymously)
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30 font-semibold">
+                    दिल से / गुप्त
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                  {isAnonymous 
+                    ? 'आपकी असली पहचान, नाम और फोटो होम फ़ीड पर पूरी तरह छिपी रहेगी।' 
+                    : 'बिना पहचान उजागर किए अपने दिल की बात, मेंटल हेल्थ या सवाल शेयर करें।'}
+                </p>
+              </div>
+            </div>
+
+            {/* Toggle Switch Button */}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isAnonymous}
+              onClick={() => setIsAnonymous(!isAnonymous)}
+              className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-slate-900 ${
+                isAnonymous ? 'bg-purple-600' : 'bg-slate-700'
+              }`}
+            >
+              <span className="sr-only">गुमनाम पोस्ट चालू या बंद करें</span>
+              <span
+                aria-hidden="true"
+                className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                  isAnonymous ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+
+          {isAnonymous && (
+            <div className="mt-3 pt-3 border-t border-purple-500/20 flex items-center gap-2 text-[11px] text-purple-200/90">
+              <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse shrink-0"></span>
+              <span>
+                यह पोस्ट Firestore के <strong>'anonymous_posts'</strong> संग्रह में सुरक्षित होगी।
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Creator Info Card - Transforms dynamically when anonymous */}
+        <div className={`flex items-center gap-3 p-3.5 rounded-2xl border transition-all ${
+          isAnonymous 
+            ? 'bg-purple-900/20 border-purple-500/30' 
+            : 'bg-slate-900/60 border-slate-800/80'
+        }`}>
           <img
-            src={currentUser.photoURL || currentUser.avatar}
-            alt={currentUser.name || currentUser.fullName}
-            className="w-10 h-10 rounded-full object-cover border border-orange-500/50"
+            src={
+              isAnonymous 
+                ? 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=200&auto=format&fit=crop&q=80'
+                : (currentUser.photoURL || currentUser.avatar)
+            }
+            alt={isAnonymous ? 'Anonymous' : (currentUser.name || currentUser.fullName)}
+            className={`w-10 h-10 rounded-full object-cover border ${
+              isAnonymous ? 'border-purple-400' : 'border-orange-500/50'
+            }`}
           />
           <div className="flex-1 min-w-0">
             <div className="text-xs font-bold text-white flex items-center gap-1.5">
-              <span>{currentUser.name || currentUser.fullName}</span>
-              {currentUser.verified && (
+              <span>{isAnonymous ? 'गुप्त नागरिक (Anonymous)' : (currentUser.name || currentUser.fullName)}</span>
+              {!isAnonymous && currentUser.verified && (
                 <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 fill-blue-400/20" />
               )}
             </div>
             <div className="text-[11px] text-slate-400 truncate">
-              {currentUser.handle} · {location}
+              {isAnonymous ? '@gupt_nagrik · भारत' : `${currentUser.handle} · ${location}`}
             </div>
           </div>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-medium">
-            सार्वजनिक (Public)
+          <span className={`text-[10px] px-2.5 py-1 rounded-full font-semibold border ${
+            isAnonymous 
+              ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' 
+              : 'bg-slate-800 text-slate-300 border-slate-700'
+          }`}>
+            {isAnonymous ? '🔒 गुप्त (Anonymous)' : 'सार्वजनिक (Public)'}
           </span>
         </div>
 

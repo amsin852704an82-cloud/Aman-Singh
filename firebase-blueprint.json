@@ -24,7 +24,7 @@
         "createdAt": { "type": "string", "description": "Account creation timestamp" },
         "updatedAt": { "type": "string", "description": "Profile last updated timestamp" }
       },
-      "required": ["uid", "name", "email", "createdAt"]
+      "required": ["uid", "name", "createdAt"]
     },
     "SocialPost": {
       "title": "SocialPost",
@@ -153,12 +153,99 @@
         "createdAt": { "type": "string", "description": "Creation ISO timestamp" }
       },
       "required": ["id", "authorUid", "authorName", "title", "description", "category", "level", "offerType", "createdAt"]
+    },
+    "AnonymousPost": {
+      "title": "AnonymousPost",
+      "description": "Anonymous confession / safe space post where author real name and photo are hidden, stored in anonymous_posts collection",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique post ID" },
+        "authorUid": { "type": "string", "description": "Private author UID for ownership and deletion rights" },
+        "authorName": { "type": "string", "description": "Display name showing 'गुप्त नागरिक (Anonymous)'" },
+        "authorPhotoURL": { "type": "string", "description": "Default anonymous mask avatar URL" },
+        "authorHandle": { "type": "string", "description": "Masked handle e.g. @gupt_bharatiya" },
+        "text": { "type": "string", "description": "Confession or real talk text" },
+        "imageURL": { "type": "string", "description": "Optional background or photo URL" },
+        "isAnonymous": { "type": "boolean", "description": "Always true for anonymous posts" },
+        "likeCount": { "type": "number", "description": "Likes count" },
+        "commentsCount": { "type": "number", "description": "Comments count" },
+        "tags": { "type": "string", "description": "Tags e.g. #DilSe #GuptTalk" },
+        "createdAt": { "type": "string", "description": "Creation ISO timestamp" }
+      },
+      "required": ["id", "authorUid", "authorName", "text", "isAnonymous", "createdAt"]
+    },
+    "PrivateAccount": {
+      "title": "PrivateAccount",
+      "description": "Private user account sensitive data isolated under users/{userId}/private/account",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth user UID" },
+        "email": { "type": "string", "description": "Private user email address" },
+        "updatedAt": { "type": "string", "description": "Timestamp of last update" }
+      },
+      "required": ["uid", "email"]
+    },
+    "AnonymousPostOwnership": {
+      "title": "AnonymousPostOwnership",
+      "description": "Private ownership registry mapping anonymous postId to real authorUid for deletion rights and moderation",
+      "type": "object",
+      "properties": {
+        "postId": { "type": "string", "description": "Associated post ID" },
+        "realAuthorUid": { "type": "string", "description": "Real author UID" },
+        "isAnonymous": { "type": "boolean", "description": "Always true" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["postId", "realAuthorUid", "isAnonymous"]
+    },
+    "AnonymousCommentOwnership": {
+      "title": "AnonymousCommentOwnership",
+      "description": "Private ownership registry mapping anonymous commentId to real authorUid",
+      "type": "object",
+      "properties": {
+        "commentId": { "type": "string", "description": "Associated comment ID" },
+        "postId": { "type": "string", "description": "Parent post ID" },
+        "realAuthorUid": { "type": "string", "description": "Real author UID" },
+        "isAnonymous": { "type": "boolean", "description": "Always true" },
+        "createdAt": { "type": "string", "description": "Creation timestamp" }
+      },
+      "required": ["commentId", "postId", "realAuthorUid", "isAnonymous"]
+    },
+    "ReportItem": {
+      "title": "ReportItem",
+      "description": "Content or user report filed by an authenticated user, reviewable and manageable exclusively by admins",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique report ID" },
+        "reportedPostId": { "type": "string", "description": "Reported post ID if applicable" },
+        "reporterUid": { "type": "string", "description": "UID of the user filing the report" },
+        "reason": { "type": "string", "description": "Category or reason for the report" },
+        "details": { "type": "string", "description": "Additional context or explanation" },
+        "status": { "type": "string", "description": "Status of the report", "enum": ["pending", "resolved", "dismissed"] },
+        "createdAt": { "type": "string", "description": "ISO timestamp" }
+      },
+      "required": ["id", "reason", "status", "createdAt"]
+    },
+    "UsernameRecord": {
+      "title": "UsernameRecord",
+      "description": "Unique username registry document stored under usernames/{username} to prevent handle collisions",
+      "type": "object",
+      "properties": {
+        "username": { "type": "string", "description": "Normalized lowercase username" },
+        "uid": { "type": "string", "description": "Firebase Auth user UID owning this username" },
+        "createdAt": { "type": "string", "description": "ISO timestamp of reservation" },
+        "updatedAt": { "type": "string", "description": "ISO timestamp of last update" }
+      },
+      "required": ["username", "uid"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "UserProfile",
       "description": "User profiles stored by UID, public fields readable by all, editable only by the owner or follow metrics"
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": "PrivateAccount",
+      "description": "Private sensitive user data like email, readable and writable only by the account owner"
     },
     "/users/{userId}/notifications/{notificationId}": {
       "schema": "NotificationItem",
@@ -171,6 +258,14 @@
     "/posts/{postId}/comments/{commentId}": {
       "schema": "PostComment",
       "description": "Comments on a post, public read, created by authenticated user, deletable by author or post owner"
+    },
+    "/anonymous_post_ownership/{postId}": {
+      "schema": "AnonymousPostOwnership",
+      "description": "Isolated private anonymous post ownership mapping, readable and deletable only by the real author or admin"
+    },
+    "/anonymous_comment_ownership/{commentId}": {
+      "schema": "AnonymousCommentOwnership",
+      "description": "Isolated private anonymous comment ownership mapping, readable and deletable only by the real author or admin"
     },
     "/follows/{followId}": {
       "schema": "UserFollow",
@@ -187,6 +282,18 @@
     "/hunar_posts/{hunarId}": {
       "schema": "HunarPost",
       "description": "Skill exchange posts readable by all, created and managed by authenticated skill owner"
+    },
+    "/anonymous_posts/{postId}": {
+      "schema": "AnonymousPost",
+      "description": "Anonymous confession posts readable by all, author real identity hidden, created and deletable by owner"
+    },
+    "/reports/{reportId}": {
+      "schema": "ReportItem",
+      "description": "Abuse and moderation reports, creatable by authenticated users, readable and manageable only by admins"
+    },
+    "/usernames/{username}": {
+      "schema": "UsernameRecord",
+      "description": "Unique username registry documents, public read, created and managed by the owner UID"
     }
   }
 }
