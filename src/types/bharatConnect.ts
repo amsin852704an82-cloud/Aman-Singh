@@ -63,6 +63,7 @@ export interface Post {
   author: User;
   caption: string;
   imageUrl?: string;
+  mediaUrl?: string;
   likesCount: number;
   commentsCount: number;
   sharesCount: number;

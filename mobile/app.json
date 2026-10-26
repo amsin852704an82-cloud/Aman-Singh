@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "BharatConnect - Railway Shayar Aman",
+    "slug": "bharatconnect-railway",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.railwayshayaraman.bharatconnect"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.railwayshayaraman.bharatconnect",
+      "versionCode": 1,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "INTERNET"
+      ]
+    },
+    "web": {
+      "favicon": "https://images.unsplash.com/photo-1510519138171-eb1362e5b888?w=48&q=80"
+    },
+    "owner": "as962130212s-team",
+    "extra": {
+      "eas": {
+        "projectId": "ed738b96-a450-40c6-a788-cd1d69f909d9"
+      }
+    }
+  }
+}

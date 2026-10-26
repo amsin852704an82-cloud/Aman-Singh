@@ -45,12 +45,10 @@ const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 // Initialize Auth
 export const auth = getAuth(app);
 
-// Initialize Firebase Storage with exact configured storage bucket
-const configuredBucket = firebaseConfig.storageBucket
-  ? (firebaseConfig.storageBucket.startsWith('gs://') ? firebaseConfig.storageBucket : `gs://${firebaseConfig.storageBucket}`)
-  : undefined;
-
-export const storage = configuredBucket ? getStorage(app, configuredBucket) : getStorage(app);
+// Initialize Firebase Storage
+// getStorage(app) natively binds to app.options.storageBucket ("flowing-impact-fw2pc.firebasestorage.app")
+// without malformed gs:// protocol prefix issues on modern Firebase storage domains.
+export const storage = getStorage(app);
 
 // Configure realistic retry timeouts so uploads never hang at 0% for 10 minutes
 try {

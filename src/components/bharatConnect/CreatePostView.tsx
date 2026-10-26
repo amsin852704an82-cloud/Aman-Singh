@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { useBharatConnect } from '../../context/BharatConnectContext';
-import { uploadPostImage } from '../../lib/postService';
+import { uploadPostImage, SmartUploadProgress } from '../../lib/postService';
 import { 
   Camera, 
   Upload, 
@@ -20,42 +20,12 @@ import {
   FolderOpen,
   ArrowRight,
   Mic,
-  RotateCw
+  RotateCw,
+  Zap,
+  Clock,
+  HardDrive
 } from 'lucide-react';
 import { AwaazRecordModal } from './AwaazRecordModal';
-
-const PRESET_IMAGES = [
-  {
-    name: 'दीपावली (Diwali)',
-    url: 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?w=900&auto=format&fit=crop&q=80',
-    tag: 'DiwaliVibes'
-  },
-  {
-    name: 'ताजमहल (Taj Mahal)',
-    url: 'https://images.unsplash.com/photo-1564507592333-c60657eea523?w=900&auto=format&fit=crop&q=80',
-    tag: 'IncredibleIndia'
-  },
-  {
-    name: 'बेंगलुरु टेक (Tech City)',
-    url: 'https://images.unsplash.com/photo-1596176530529-78163a4f7af2?w=900&auto=format&fit=crop&q=80',
-    tag: 'DigitalIndia'
-  },
-  {
-    name: 'मसाला चाय (Chai)',
-    url: 'https://images.unsplash.com/photo-1544787219-7f47ccb76574?w=900&auto=format&fit=crop&q=80',
-    tag: 'ChaiLove'
-  },
-  {
-    name: 'हवा महल (Jaipur)',
-    url: 'https://images.unsplash.com/photo-1609137144813-7d9921338f24?w=900&auto=format&fit=crop&q=80',
-    tag: 'RajasthanDiaries'
-  },
-  {
-    name: 'भारतीय साड़ी (Handloom)',
-    url: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=900&auto=format&fit=crop&q=80',
-    tag: 'VocalForLocal'
-  }
-];
 
 const POPULAR_LOCATIONS = [
   'New Delhi, Delhi',
@@ -88,7 +58,8 @@ export const CreatePostView: React.FC = () => {
     t, 
     setActiveTab, 
     isFirebaseAuthLoggedIn, 
-    setIsAuthModalOpen 
+    setIsAuthModalOpen,
+    setToastMessage 
   } = useBharatConnect();
 
   const [caption, setCaption] = useState('');
@@ -109,6 +80,7 @@ export const CreatePostView: React.FC = () => {
   // Loading & Progress & Error States
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [uploadStats, setUploadStats] = useState<SmartUploadProgress | null>(null);
   const [isPublishing, setIsPublishing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
@@ -125,7 +97,7 @@ export const CreatePostView: React.FC = () => {
     }
 
     if (file.size > 10 * 1024 * 1024) {
-      setErrorMessage('फोटो का आकार 10MB से अधिक नहीं होना चाहिए।');
+      setErrorMessage('फोटो का आकार 10MB से अधिक नहीं होना चाहिए। (Max 10MB)');
       return;
     }
 
@@ -165,6 +137,7 @@ export const CreatePostView: React.FC = () => {
     setIsPhoneUpload(false);
     setErrorMessage(null);
     setUploadProgress(0);
+    setUploadStats(null);
     if (galleryInputRef.current) galleryInputRef.current.value = '';
     if (cameraInputRef.current) cameraInputRef.current.value = '';
   };
@@ -179,21 +152,6 @@ export const CreatePostView: React.FC = () => {
 
   const handleAddEmoji = (emoji: string) => {
     setCaption((prev) => prev + emoji);
-  };
-
-  const handleSelectPreset = (preset: typeof PRESET_IMAGES[0]) => {
-    setErrorMessage(null);
-    if (selectedImage && selectedImage.startsWith('blob:')) {
-      URL.revokeObjectURL(selectedImage);
-    }
-    setSelectedFile(null);
-    setSelectedImage(preset.url);
-    setImageFileName(preset.name);
-    setImageFileSize('सैम्पल फोटो');
-    setIsPhoneUpload(false);
-    if (!selectedTags.includes(preset.tag)) {
-      setSelectedTags((prev) => [...prev, preset.tag]);
-    }
   };
 
   // Immediate fallback: Publish caption without photo if Storage bucket is uninitialized
@@ -242,20 +200,22 @@ export const CreatePostView: React.FC = () => {
         try {
           finalImageUrl = await uploadPostImage(
             selectedFile, 
-            (progress) => {
-              setUploadProgress(progress);
+            (stats) => {
+              setUploadStats(stats);
+              setUploadProgress(stats.percent);
             },
             isAnonymous
           );
         } catch (uploadErr: any) {
           setIsUploading(false);
           setIsPublishing(false);
-          setErrorMessage(uploadErr?.message || 'फोटो अपलोड विफल रहा।');
+          const msg = uploadErr?.message || 'Upload failed. Please check your internet connection.';
+          setErrorMessage(msg);
           return;
         }
         setIsUploading(false);
       } else if (selectedImage && !selectedImage.startsWith('blob:')) {
-        // Direct preset or web URL
+        // Direct web URL
         finalImageUrl = selectedImage;
       }
 
@@ -263,8 +223,9 @@ export const CreatePostView: React.FC = () => {
       await createPost(caption, finalImageUrl, location, selectedTags, undefined, isAnonymous);
       setCaption('');
       handleRemoveImage();
-      setIsPublishing(false);
-      setSuccessNotice(isAnonymous ? 'आपकी गुमनाम (दिल से) पोस्ट Firestore में प्रकाशित हो गई!' : 'आपकी पोस्ट सफलतापूर्वक Firestore में प्रकाशित हो गई!');
+      const successMsg = isAnonymous ? 'आपकी गुमनाम पोस्ट प्रकाशित हो गई! (Dil Se Anonymous Post Live)' : 'आपकी पोस्ट सफलतापूर्वक प्रकाशित हो गई! 🎉 (Post Published)';
+      setSuccessNotice(successMsg);
+      setToastMessage(successMsg);
       setActiveTab('home');
     } catch (err: any) {
       setIsPublishing(false);
@@ -538,17 +499,46 @@ export const CreatePostView: React.FC = () => {
 
               {/* Upload Progress Overlay */}
               {isUploading && (
-                <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center gap-3 p-4 text-white z-10 backdrop-blur-xs">
-                  <Loader2 className="w-8 h-8 text-orange-400 animate-spin" />
-                  <div className="w-48 bg-slate-800 rounded-full h-2 overflow-hidden border border-slate-700">
+                <div className="absolute inset-0 bg-slate-950/85 flex flex-col items-center justify-center gap-3 p-5 text-white z-20 backdrop-blur-md">
+                  <div className="flex items-center gap-2">
+                    <Loader2 className="w-5 h-5 text-orange-400 animate-spin" />
+                    <span className="text-sm font-bold bg-gradient-to-r from-orange-400 to-amber-300 bg-clip-text text-transparent">
+                      Posting... (Uploading) · {uploadProgress}%
+                    </span>
+                  </div>
+
+                  {/* Real-time Progress Bar */}
+                  <div className="w-full max-w-xs bg-slate-800 rounded-full h-2.5 overflow-hidden border border-slate-700 shadow-inner">
                     <div 
-                      className="bg-gradient-to-r from-orange-500 to-amber-400 h-full transition-all duration-300"
+                      className="bg-gradient-to-r from-orange-500 via-amber-400 to-emerald-400 h-full transition-all duration-200"
                       style={{ width: `${uploadProgress}%` }}
                     />
                   </div>
-                  <span className="text-xs font-bold tracking-wide">
-                    Firebase Storage पर अपलोड हो रही है... {uploadProgress}%
-                  </span>
+
+                  {/* YouTube-style MB, Speed, and Time Remaining */}
+                  {uploadStats ? (
+                    <div className="space-y-1.5 text-center font-mono">
+                      <p className="text-xs text-slate-200 font-semibold tracking-wide">
+                        अपलोड: <span className="text-orange-400">{uploadStats.uploadedMB} MB</span> / {uploadStats.totalMB} MB ({uploadStats.speedMBps} MB/s)
+                      </p>
+                      <div className="flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+                        <Clock className="w-3 h-3 text-amber-400" />
+                        <span>{uploadProgress >= 100 ? 'सत्यापित हो रहा है...' : `~${uploadStats.timeRemainingSec} सेकंड बचे हैं`}</span>
+                      </div>
+                      <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1">
+                          <HardDrive className="w-3 h-3" />
+                          <span>{uploadStats.originalSizeMB} MB ➔ {uploadStats.compressedSizeMB} MB</span>
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-orange-500/20 text-orange-300 border border-orange-500/30 flex items-center gap-1">
+                          <Zap className="w-3 h-3" />
+                          <span>1080p स्मार्ट कम्प्रेशन</span>
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-slate-400 font-mono">अपलोड शुरू हो रहा है...</span>
+                  )}
                 </div>
               )}
 
@@ -640,43 +630,6 @@ export const CreatePostView: React.FC = () => {
           )}
         </div>
 
-        {/* 1-Click Indian Sample Presets (For instant testing) */}
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>त्वरित 1-क्लिक सैम्पल फ़ोटो (Sample Indian Photos):</span>
-            </span>
-          </div>
-
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-            {PRESET_IMAGES.map((preset) => {
-              const isSelected = selectedImage === preset.url;
-              return (
-                <button
-                  type="button"
-                  key={preset.name}
-                  onClick={() => handleSelectPreset(preset)}
-                  className={`relative rounded-xl overflow-hidden aspect-square border-2 transition active:scale-95 cursor-pointer ${
-                    isSelected
-                      ? 'border-orange-500 ring-2 ring-orange-500/30'
-                      : 'border-slate-800 opacity-70 hover:opacity-100'
-                  }`}
-                >
-                  <img src={preset.url} alt={preset.name} className="w-full h-full object-cover" />
-                  <div className="absolute inset-x-0 bottom-0 bg-black/80 px-1 py-0.5 text-[9px] text-white truncate text-center">
-                    {preset.name.split(' ')[0]}
-                  </div>
-                  {isSelected && (
-                    <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-orange-500 text-white flex items-center justify-center">
-                      <Check className="w-2.5 h-2.5" />
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
 
         {/* 2. Caption Textarea & Emoji Toolbar */}
         <div className="space-y-1.5">
@@ -788,12 +741,16 @@ export const CreatePostView: React.FC = () => {
             {isUploading ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin text-white" />
-                <span>फ़ोटो अपलोड हो रही है... ({uploadProgress}%)</span>
+                <span>
+                  {uploadStats
+                    ? `Posting... ${uploadStats.uploadedMB}/${uploadStats.totalMB} MB (${uploadStats.speedMBps} MB/s) · ${uploadProgress}%`
+                    : `Posting... (Uploading) · ${uploadProgress}%`}
+                </span>
               </>
             ) : isPublishing ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin text-white" />
-                <span>Firestore में पोस्ट सेव हो रही है...</span>
+                <span>Posting... (Saving to Feed)</span>
               </>
             ) : !isFirebaseAuthLoggedIn ? (
               <>

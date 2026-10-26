@@ -24,6 +24,8 @@ import { LoginPage } from './components/bharatConnect/LoginPage';
 import { AuthModal } from './components/bharatConnect/AuthModal';
 import { UserProfileModal } from './components/bharatConnect/UserProfileModal';
 import { LandingPageView } from './components/bharatConnect/LandingPageView';
+import { NetworkStatusBanner } from './components/bharatConnect/NetworkStatusBanner';
+import { AppErrorBoundary } from './components/bharatConnect/AppErrorBoundary';
 import { CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 import { initGoogleAnalytics, trackPageView } from './lib/analytics';
 
@@ -116,16 +118,11 @@ const BharatConnectContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col antialiased selection:bg-orange-500 selection:text-white font-sans">
-      {/* Demo Mode Notice Banner if in demo mode */}
-      {isDemoMode && !user && (
-        <div className="bg-amber-500/10 border-b border-amber-500/30 px-4 py-1.5 text-center text-xs text-amber-300 flex items-center justify-center gap-2">
-          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-          <span>आप डेमो / अतिथि मोड में हैं। संपूर्ण व्यक्तिगत सुविधाओं के लिए लॉगिन करें।</span>
-        </div>
-      )}
-
       {/* Top Navigation Bar */}
       <Navbar />
+
+      {/* Real-time Network Offline / Online Indicator */}
+      <NetworkStatusBanner />
 
       {/* Main Container: Supports native full width or simulated Android phone viewport */}
       <main className="flex-1 flex justify-center w-full">
@@ -148,8 +145,12 @@ const BharatConnectContent: React.FC = () => {
             </div>
           )}
 
-          {/* Active View Content */}
-          <div className="pb-24">{renderActiveView()}</div>
+          {/* Active View Content wrapped in ErrorBoundary */}
+          <div className="pb-24">
+            <AppErrorBoundary>
+              {renderActiveView()}
+            </AppErrorBoundary>
+          </div>
         </div>
       </main>
 

@@ -33,6 +33,8 @@ export interface Post {
   author: User;
   content: string;
   mediaUrl?: string;
+  imageUrl?: string;
+  imageURL?: string;
   mediaType?: 'image' | 'video' | 'carousel';
   mediaItems?: PostMediaItem[];
   tags: string[];

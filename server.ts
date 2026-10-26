@@ -2,6 +2,7 @@ import './instrument';
 import express, { Request, Response, NextFunction } from 'express';
 import * as Sentry from '@sentry/node';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -40,40 +41,46 @@ async function startServer() {
   validateEnvironment();
 
   const app = express();
-  const PORT = Number(process.env.PORT) || 3000;
+  // Support --port CLI argument passed by dev supervisor while defaulting safely to 3000
+  const portArgIndex = process.argv.indexOf('--port');
+  const cliPort = portArgIndex !== -1 && process.argv[portArgIndex + 1] ? Number(process.argv[portArgIndex + 1]) : null;
+  const PORT = cliPort || 3000;
   const isProduction = process.env.NODE_ENV === 'production';
 
   // 1. Trust proxy (for Railway, Render, Cloud Run)
   app.set('trust proxy', 1);
 
-  // 2. Helmet with custom Content Security Policy
+  // 2. Helmet with custom Content Security Policy (allow iframe embedding in AI Studio preview)
   app.use(
     helmet({
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          imgSrc: [
-            "'self'",
-            'data:',
-            'blob:',
-            'https://res.cloudinary.com',
-            'https://images.unsplash.com',
-            'https://commondatastorage.googleapis.com'
-          ],
-          connectSrc: [
-            "'self'",
-            'https://api.cloudinary.com',
-            'https://firestore.googleapis.com',
-            'https://identitytoolkit.googleapis.com',
-            'https://firebasestorage.googleapis.com'
-          ],
-          scriptSrc: isProduction
-            ? ["'self'"]
-            : ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-          styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
-          fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:']
-        }
-      },
+      frameguard: false,
+      contentSecurityPolicy: isProduction
+        ? {
+            directives: {
+              defaultSrc: ["'self'"],
+              imgSrc: [
+                "'self'",
+                'data:',
+                'blob:',
+                'https://res.cloudinary.com',
+                'https://images.unsplash.com',
+                'https://commondatastorage.googleapis.com',
+                'https://picsum.photos',
+                'https://fastly.picsum.photos'
+              ],
+              connectSrc: [
+                "'self'",
+                'https://api.cloudinary.com',
+                'https://firestore.googleapis.com',
+                'https://identitytoolkit.googleapis.com',
+                'https://firebasestorage.googleapis.com'
+              ],
+              scriptSrc: ["'self'"],
+              styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+              fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:']
+            }
+          }
+        : false,
       crossOriginEmbedderPolicy: false
     })
   );
@@ -695,9 +702,14 @@ async function startServer() {
 
   // Frontend mounting: Vite middleware in Dev, Static in Prod
   if (isProduction) {
-    app.use(express.static(path.resolve(__dirname, 'dist')));
+    const distPath = fs.existsSync(path.resolve(__dirname, 'dist', 'index.html'))
+      ? path.resolve(__dirname, 'dist')
+      : fs.existsSync(path.resolve(__dirname, 'index.html'))
+        ? path.resolve(__dirname)
+        : path.resolve(process.cwd(), 'dist');
+    app.use(express.static(distPath));
     app.get('*', (req: Request, res: Response) => {
-      res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
+      res.sendFile(path.resolve(distPath, 'index.html'));
     });
   } else {
     const { createServer: createViteServer } = await import('vite');

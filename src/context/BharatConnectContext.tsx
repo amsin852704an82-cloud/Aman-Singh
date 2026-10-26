@@ -213,6 +213,15 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
       if (user) {
         try {
           const profile = await saveOrUpdateUserProfile(user);
+          if (!profile.fullName || profile.fullName.startsWith('as9621302122') || profile.username?.startsWith('as9621302122')) {
+            profile.fullName = 'Aman | भारतीय रेल प्रेमी 🇮🇳';
+            profile.name = 'Aman | भारतीय रेल प्रेमी 🇮🇳';
+            profile.handle = '@railway_shayar_aman';
+            profile.username = 'railway_shayar_aman';
+            profile.bio = 'Indian Railway & Train Lover ❤️ | Deep Hindi Shayari & Quotes 🚆';
+            profile.avatar = 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200';
+            profile.photoURL = 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=200';
+          }
           setCurrentUser(profile);
           setUsers((prev) => {
             const exists = prev.some((u) => u.id === profile.id);
@@ -234,7 +243,10 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
     const unsubscribePosts = subscribeToFirestorePosts(
       (firestorePosts) => {
         if (firestorePosts && firestorePosts.length > 0) {
-          setPosts(firestorePosts);
+          // Merge real live Firestore posts with community posts so the feed is never empty!
+          const firestoreIds = new Set(firestorePosts.map((p) => p.id));
+          const communityPosts = INITIAL_POSTS.filter((p) => !firestoreIds.has(p.id));
+          setPosts([...firestorePosts, ...communityPosts]);
         } else {
           // If Firestore is empty initially, display initial posts as starting content
           setPosts(INITIAL_POSTS);

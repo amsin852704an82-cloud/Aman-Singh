@@ -28,6 +28,10 @@ import {
 } from 'lucide-react';
 import { AwaazAudioCard } from './AwaazAudioCard';
 import { AwaazRecordModal } from './AwaazRecordModal';
+import { FloatingActionButton } from './FloatingActionButton';
+import { SkeletonFeedCard } from './SkeletonFeedCard';
+import { ProgressiveImage } from './ProgressiveImage';
+import { triggerHaptic } from '../../lib/deviceOptimization';
 
 export const HomeFeed: React.FC = () => {
   const { 
@@ -59,6 +63,17 @@ export const HomeFeed: React.FC = () => {
   const [inlineComments, setInlineComments] = useState<{ [postId: string]: string }>({});
   const [feedTab, setFeedTab] = useState<'explore' | 'following' | 'awaaz'>('explore');
   const [isAwaazRecordOpen, setIsAwaazRecordOpen] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(10);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  const handleLoadMore = () => {
+    setIsLoadingMore(true);
+    triggerHaptic('light');
+    setTimeout(() => {
+      setVisibleCount((prev) => prev + 10);
+      setIsLoadingMore(false);
+    }, 350);
+  };
 
   const handleStartEdit = (post: Post) => {
     setEditingPost(post);
@@ -84,11 +99,22 @@ export const HomeFeed: React.FC = () => {
   };
 
   const handleDoubleTapLike = (post: Post) => {
+    triggerHaptic('doubleTap');
     if (!post.isLiked) {
       toggleLikePost(post.id);
     }
     setLikedAnimPostId(post.id);
     setTimeout(() => setLikedAnimPostId(null), 800);
+  };
+
+  const handleLikeClick = (postId: string) => {
+    triggerHaptic('medium');
+    toggleLikePost(postId);
+  };
+
+  const handleSaveClick = (postId: string) => {
+    triggerHaptic('light');
+    toggleSavePost(postId);
   };
 
   const handleShare = (post: Post) => {
@@ -272,13 +298,16 @@ export const HomeFeed: React.FC = () => {
           {/* Posts Stream */}
           <div className="space-y-4">
             {(() => {
+              const photoPosts = posts.filter((p) => p.mediaType !== 'audio' && !p.audioURL);
+              const audioPosts = posts.filter((p) => p.mediaType === 'audio' || Boolean(p.audioURL));
+
               const displayedPosts = feedTab === 'following'
                 ? posts.filter((p) => {
                     const authorUid = p.authorUid || p.authorId || p.author?.id || p.author?.uid;
                     return authorUid && followingIds.includes(authorUid);
                   })
                 : feedTab === 'awaaz'
-                ? posts.filter((p) => p.mediaType === 'audio' || Boolean(p.audioURL))
+                ? audioPosts
                 : posts;
 
               if (feedTab === 'following' && displayedPosts.length === 0) {
@@ -321,7 +350,12 @@ export const HomeFeed: React.FC = () => {
                 );
               }
 
-              return displayedPosts.map((post) => {
+              const paginatedPosts = displayedPosts.slice(0, visibleCount);
+              const hasMorePosts = displayedPosts.length > visibleCount;
+
+              return (
+                <>
+                  {paginatedPosts.map((post) => {
               const authorName = post.author?.name || post.author?.fullName || post.authorName || 'भारत नागरिक';
                 const authorAvatar = post.author?.photoURL || post.author?.avatar || post.authorPhotoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80';
                 const authorHandle = post.author?.handle || `@${authorName.toLowerCase().replace(/\s+/g, '')}`;
@@ -329,7 +363,7 @@ export const HomeFeed: React.FC = () => {
                                  (post.authorId && currentUser.uid && post.authorId === currentUser.uid) ||
                                  (post.author?.id && post.author.id === currentUser.id);
                 const postText = post.text || post.caption || '';
-                const postImg = post.imageUrl || post.imageURL || '';
+                const postImg = post.imageUrl || post.imageURL || post.mediaUrl || '';
                 const currentLikes = typeof post.likeCount === 'number' ? post.likeCount : (post.likesCount || 0);
 
                 return (
@@ -494,17 +528,20 @@ export const HomeFeed: React.FC = () => {
                         onDoubleClick={() => handleDoubleTapLike(post)}
                         className="relative aspect-square sm:aspect-[4/3] bg-slate-950 overflow-hidden cursor-pointer select-none group"
                       >
-                        <img
+                        <ProgressiveImage
                           src={postImg}
                           alt={postText || 'Post image'}
-                          className="w-full h-full object-cover"
-                          loading="lazy"
+                          aspectRatioClass="aspect-square sm:aspect-[4/3]"
+                          onDoubleClick={() => handleDoubleTapLike(post)}
                         />
 
-                        {/* Double tap heart explosion animation */}
+                        {/* Instagram Double-Tap Heart Explosion */}
                         {likedAnimPostId === post.id && (
-                          <div className="absolute inset-0 flex items-center justify-center animate-ping">
-                            <Heart className="w-24 h-24 fill-rose-500 text-rose-500 drop-shadow-xl" />
+                          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                            <div className="relative flex items-center justify-center">
+                              <Heart className="w-28 h-28 fill-rose-500 text-rose-500 drop-shadow-[0_10px_25px_rgba(244,63,94,0.6)] animate-ping" />
+                              <Heart className="absolute w-24 h-24 fill-rose-500 text-rose-500 drop-shadow-2xl" />
+                            </div>
                           </div>
                         )}
                       </div>
@@ -529,9 +566,9 @@ export const HomeFeed: React.FC = () => {
                     <div className="p-3.5 pb-2">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                          {/* Like button */}
+                          {/* Like button with haptic feedback */}
                           <button
-                            onClick={() => toggleLikePost(post.id)}
+                            onClick={() => handleLikeClick(post.id)}
                             className={`min-h-[44px] min-w-[44px] flex items-center justify-center transition-transform active:scale-125 cursor-pointer ${
                               post.isLiked ? 'text-rose-500' : 'text-slate-200 hover:text-rose-400'
                             }`}
@@ -556,9 +593,9 @@ export const HomeFeed: React.FC = () => {
                           </button>
                         </div>
 
-                        {/* Bookmark Save button */}
+                        {/* Bookmark Save button with haptic feedback */}
                         <button
-                          onClick={() => toggleSavePost(post.id)}
+                          onClick={() => handleSaveClick(post.id)}
                           className={`min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors cursor-pointer ${
                             post.isSaved ? 'text-amber-400' : 'text-slate-200 hover:text-amber-300'
                           }`}
@@ -633,9 +670,44 @@ export const HomeFeed: React.FC = () => {
                   </form>
                 </div>
               </article>
-            );
-          });
-        })()}
+                    );
+                  })}
+
+                  {/* Shimmer Skeleton Loader when loading more */}
+                  {isLoadingMore && (
+                    <div className="space-y-4 pt-1">
+                      <SkeletonFeedCard />
+                    </div>
+                  )}
+
+                  {/* Pagination: Load More Posts Button */}
+                  {hasMorePosts && !isLoadingMore && (
+                    <div className="pt-2 text-center">
+                      <button
+                        onClick={handleLoadMore}
+                        className="w-full py-3.5 rounded-2xl bg-slate-900 hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-slate-300 text-xs font-bold transition flex items-center justify-center gap-2 active:scale-98 shadow-sm cursor-pointer"
+                      >
+                        <span>और पोस्ट देखें (Load More Posts)</span>
+                        <span className="text-[11px] text-orange-400 font-mono">
+                          · {paginatedPosts.length} / {displayedPosts.length}
+                        </span>
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Instagram-style All Caught Up Banner */}
+                  {!hasMorePosts && displayedPosts.length > 5 && (
+                    <div className="py-6 px-4 bg-slate-900/60 border border-slate-800 rounded-2xl text-center space-y-1.5 backdrop-blur-sm">
+                      <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center mx-auto">
+                        <Check className="w-4 h-4 stroke-[3]" />
+                      </div>
+                      <p className="text-xs font-bold text-slate-200">आप सभी पोस्ट्स देख चुके हैं (You're All Caught Up)</p>
+                      <p className="text-[11px] text-slate-500">आपने पिछले कुछ घंटों की सभी ताज़ा पोस्ट्स पढ़ ली हैं।</p>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
 
@@ -861,6 +933,9 @@ export const HomeFeed: React.FC = () => {
         isOpen={isAwaazRecordOpen} 
         onClose={() => setIsAwaazRecordOpen(false)} 
       />
+
+      {/* Mobile-first Floating Action Button (FAB) with Image, Reel, and Mic quick actions */}
+      <FloatingActionButton />
     </div>
   );
 };

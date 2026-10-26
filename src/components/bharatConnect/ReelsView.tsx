@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useBharatConnect } from '../../context/BharatConnectContext';
-import { Heart, MessageCircle, Share2, Music, CheckCircle2, MoreVertical, ChevronDown, ChevronUp, Volume2, VolumeX, Play, Pause } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Music, CheckCircle2, MoreVertical, ChevronDown, ChevronUp, Volume2, VolumeX, Play, Pause, Radio } from 'lucide-react';
 import { ReportModal } from './ReportModal';
 import { Post } from '../../types/bharatConnect';
 
@@ -19,8 +19,41 @@ export const ReelsView: React.FC = () => {
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [likeHeartAnim, setLikeHeartAnim] = useState(false);
 
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
   const currentReel = reels[currentIndex] || reels[0];
   const creatorUser = users.find((u) => u.id === currentReel?.author?.id) || currentReel?.author;
+
+  // Sync Video & Audio playback, volume, and mute status
+  useEffect(() => {
+    const video = videoRef.current;
+    const audio = audioRef.current;
+
+    if (video) {
+      video.volume = 1.0;
+      video.muted = isMuted;
+      if (isPlaying) {
+        video.play().catch(() => {
+          // Autoplay policy fallback: mute first then play
+          video.muted = true;
+          video.play().catch(() => {});
+        });
+      } else {
+        video.pause();
+      }
+    }
+
+    if (audio) {
+      audio.volume = 1.0;
+      audio.muted = isMuted;
+      if (isPlaying) {
+        audio.play().catch(() => {});
+      } else {
+        audio.pause();
+      }
+    }
+  }, [currentIndex, isPlaying, isMuted]);
 
   const handleNext = () => {
     if (currentIndex < reels.length - 1) {
@@ -35,6 +68,24 @@ export const ReelsView: React.FC = () => {
       setCurrentIndex((prev) => prev - 1);
     } else {
       setCurrentIndex(reels.length - 1);
+    }
+  };
+
+  const handleToggleSound = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const nextMuted = !isMuted;
+    setIsMuted(nextMuted);
+
+    if (videoRef.current) {
+      videoRef.current.muted = nextMuted;
+      videoRef.current.volume = 1.0;
+    }
+    if (audioRef.current) {
+      audioRef.current.muted = nextMuted;
+      audioRef.current.volume = 1.0;
+      if (!nextMuted) {
+        audioRef.current.play().catch(() => {});
+      }
     }
   };
 
@@ -81,19 +132,50 @@ export const ReelsView: React.FC = () => {
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] p-2 sm:p-4">
       <div className="relative w-full max-w-[390px] h-[680px] bg-black rounded-3xl overflow-hidden shadow-2xl border border-slate-800 flex flex-col justify-between">
         
-        {/* Background Video Simulation */}
+        {/* Real HTML5 Video Playback Element */}
         <div 
-          className="absolute inset-0 bg-cover bg-center cursor-pointer select-none"
-          style={{ backgroundImage: `url(${currentReel.posterUrl})` }}
+          className="absolute inset-0 cursor-pointer select-none bg-black"
           onDoubleClick={handleDoubleTap}
           onClick={() => setIsPlaying((p) => !p)}
         >
+          <video
+            ref={videoRef}
+            key={currentReel.id}
+            src={currentReel.videoUrl}
+            poster={currentReel.posterUrl}
+            loop
+            playsInline
+            autoPlay
+            muted={isMuted}
+            className="w-full h-full object-cover"
+          />
+
+          {/* Dedicated Soundtrack Audio Element for ambient crisp audio */}
+          <audio
+            ref={audioRef}
+            src="https://actions.google.com/sounds/v1/ambiences/outdoor_ambience.ogg"
+            loop
+            preload="auto"
+          />
+
           {/* Subtle gradient overlays */}
           <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/90 pointer-events-none" />
 
+          {/* Interactive Tap-to-Unmute Pill Banner if muted */}
+          {isMuted && (
+            <button
+              type="button"
+              onClick={handleToggleSound}
+              className="absolute top-16 left-1/2 -translate-x-1/2 z-30 px-3.5 py-1.5 rounded-full bg-slate-900/90 text-orange-300 border border-orange-500/50 shadow-xl backdrop-blur-md flex items-center gap-2 text-xs font-bold hover:scale-105 active:scale-95 transition"
+            >
+              <VolumeX className="w-4 h-4 text-orange-400 animate-pulse" />
+              <span>🔊 आवाज़ चालू करें (Tap to Unmute)</span>
+            </button>
+          )}
+
           {/* Pause overlay icon */}
           {!isPlaying && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/30 pointer-events-none">
+            <div className="absolute inset-0 flex items-center justify-center bg-black/30 pointer-events-none z-20">
               <div className="w-16 h-16 rounded-full bg-black/60 flex items-center justify-center text-white backdrop-blur-sm animate-scale-in">
                 <Play className="w-8 h-8 fill-white ml-1" />
               </div>
@@ -102,14 +184,14 @@ export const ReelsView: React.FC = () => {
 
           {/* Double tap heart animation */}
           {likeHeartAnim && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
               <Heart className="w-24 h-24 text-rose-500 fill-rose-500 animate-ping" />
             </div>
           )}
         </div>
 
         {/* Top Bar inside Reel */}
-        <div className="relative z-10 px-4 pt-4 flex items-center justify-between text-white">
+        <div className="relative z-10 px-4 pt-4 flex items-center justify-between text-white pointer-events-auto">
           <div className="flex items-center gap-2">
             <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-orange-400 to-amber-200 bg-clip-text text-transparent">
               रील्स (Reels)
@@ -121,15 +203,18 @@ export const ReelsView: React.FC = () => {
 
           <div className="flex items-center gap-2">
             <button 
-              onClick={() => setIsMuted((m) => !m)}
-              className="p-2 rounded-full bg-black/40 backdrop-blur-md text-white hover:bg-black/60 active:scale-95 transition"
+              onClick={handleToggleSound}
+              className={`p-2 rounded-full backdrop-blur-md transition active:scale-95 cursor-pointer ${
+                isMuted ? 'bg-red-500/20 text-red-400 border border-red-500/40' : 'bg-black/50 text-white hover:bg-black/70'
+              }`}
               aria-label="Toggle sound"
+              title={isMuted ? 'आवाज़ चालू करें' : 'म्यूट करें'}
             >
-              {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4" />}
+              {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />}
             </button>
             <button 
               onClick={() => setReportModalOpen(true)}
-              className="p-2 rounded-full bg-black/40 backdrop-blur-md text-white hover:bg-black/60 active:scale-95 transition"
+              className="p-2 rounded-full bg-black/40 backdrop-blur-md text-white hover:bg-black/60 active:scale-95 transition cursor-pointer"
               aria-label="Options"
             >
               <MoreVertical className="w-4 h-4" />
@@ -205,12 +290,25 @@ export const ReelsView: React.FC = () => {
               ))}
             </div>
 
-            {/* Audio Track with Animated Spinning Disc */}
-            <div className="flex items-center gap-2 text-xs text-slate-200 bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full w-fit">
-              <Music className="w-3.5 h-3.5 text-orange-400" />
-              <div className="overflow-hidden w-40 text-ellipsis whitespace-nowrap text-[11px]">
+            {/* Audio Track with Animated Spinning Disc & Live Equalizer Waves */}
+            <div 
+              onClick={handleToggleSound}
+              className="flex items-center gap-2 text-xs text-slate-200 bg-black/40 hover:bg-black/60 backdrop-blur-md px-3 py-1.5 rounded-full w-fit cursor-pointer transition select-none"
+              title={isMuted ? 'साउंड ऑन करें' : 'साउंड म्यूट करें'}
+            >
+              <Music className={`w-3.5 h-3.5 ${!isMuted ? 'text-orange-400' : 'text-slate-400'}`} />
+              <div className="overflow-hidden w-36 text-ellipsis whitespace-nowrap text-[11px] font-medium">
                 {currentReel.audioTitle}
               </div>
+              {!isMuted && isPlaying ? (
+                <div className="flex items-end gap-0.5 h-3">
+                  <span className="w-0.5 bg-emerald-400 rounded-full animate-bounce h-2.5" />
+                  <span className="w-0.5 bg-amber-400 rounded-full animate-bounce h-3 delay-100" />
+                  <span className="w-0.5 bg-orange-400 rounded-full animate-bounce h-2 delay-200" />
+                </div>
+              ) : (
+                <VolumeX className="w-3 h-3 text-red-400" />
+              )}
             </div>
           </div>
 

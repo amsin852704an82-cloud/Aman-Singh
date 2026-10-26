@@ -79,11 +79,6 @@ export const Navbar: React.FC = () => {
           </div>
         </div>
 
-        {/* Center: Demo Mode Info Badge */}
-        <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-[11px] text-emerald-300 font-medium">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span>{t.demoMode}</span>
-        </div>
 
         {/* Right: Controls & Language */}
         <div className="flex items-center gap-1.5 sm:gap-2">

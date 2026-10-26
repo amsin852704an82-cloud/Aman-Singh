@@ -153,6 +153,7 @@ export const INITIAL_POSTS: Post[] = [
     userId: INITIAL_USERS[0].id,
     author: INITIAL_USERS[0],
     content: 'Just migrated our social feed cache to Redis 7 with LRU eviction! Handling 50k QPS on a single node without breaking a sweat. The speed of open-source infra for Bharat is unreal. 🇮🇳⚡\n\nPostgres 14+ with pg_trgm indices + Redis + MinIO S3 is pure productivity.',
+    imageUrl: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1000&q=80',
     tags: ['TechStack', 'Redis', 'PostgreSQL', 'DigitalIndia'],
     language: 'English',
     likesCount: 1243,
@@ -169,8 +170,9 @@ export const INITIAL_POSTS: Post[] = [
     id: 'e5ffbb44-4c5d-9bc3-6618-1aa4ac830f66',
     userId: INITIAL_USERS[1].id,
     author: INITIAL_USERS[1],
-    content: 'भारतीय भाषाओं में UI/UX डिज़ाइन करना सिर्फ़ फ़ॉन्ट बदलना नहीं है, बल्कि लेआउट और इमोशन को समझना है। हमने 8 प्रमुख भारतीय लिपियों के लिए नया टाइपोग्राफ़ी सिस्टम जारी किया है।\n\nआपकी क्या राय है?',
-    tags: ['DesignBharat', 'IndicTech', 'Devnagari'],
+    content: 'Ganga Aarti at Dashashwamedh Ghat, Varanasi. The spiritual energy and devotion of Bharat is truly unmatched! 🪔✨ हर हर महादेव।',
+    imageUrl: 'https://images.unsplash.com/photo-1561361513-2d000a50f0dc?auto=format&fit=crop&w=1000&q=80',
+    tags: ['IncredibleIndia', 'Varanasi', 'SpiritualBharat'],
     language: 'Hindi',
     likesCount: 2890,
     commentCount: 215,
@@ -179,15 +181,16 @@ export const INITIAL_POSTS: Post[] = [
     viewCount: 64100,
     moderationStatus: 'approved',
     createdAt: '45m ago',
-    region: 'Mumbai',
-    locationName: 'Bandra West, Mumbai'
+    region: 'Varanasi',
+    locationName: 'Dashashwamedh Ghat, Varanasi'
   },
   {
     id: 'd6eedd33-3b6c-8cd2-5507-0bb3bd720a77',
     userId: INITIAL_USERS[2].id,
     author: INITIAL_USERS[2],
-    content: 'Huge milestone: India recorded 14.9 Billion UPI transactions this month. Next frontier is localized social commerce and vernacular creator monetisation directly via ONDC and UPI auto-pay.',
-    tags: ['UPI', 'Fintech', 'IndiaGrowth', 'Startups'],
+    content: 'Sunset over Lake Pichola, Udaipur. Golden hour in the City of Lakes hits differently. 🏰🌅 #RajasthanDiaries #BharatTravel',
+    imageUrl: 'https://images.unsplash.com/photo-1599661046289-e31897846e41?auto=format&fit=crop&w=1000&q=80',
+    tags: ['RajasthanDiaries', 'Udaipur', 'BharatTravel', 'IncredibleIndia'],
     language: 'English',
     likesCount: 4510,
     commentCount: 312,
@@ -196,15 +199,16 @@ export const INITIAL_POSTS: Post[] = [
     viewCount: 98000,
     moderationStatus: 'approved',
     createdAt: '2h ago',
-    region: 'Delhi NCR',
-    locationName: 'Connaught Place, New Delhi'
+    region: 'Rajasthan',
+    locationName: 'Lake Pichola, Udaipur'
   },
   {
     id: 'c7ffcc22-2a7b-7bc1-4496-9aa2ac610b88',
     userId: INITIAL_USERS[3].id,
     author: INITIAL_USERS[3],
-    content: 'எங்கள் தமிழ் AI மொழி மாதிரி இப்போது திறந்த மூலமாக கிடைக்கிறது! தமிழ் இலக்கியம் மற்றும் தொழில்நுட்ப கலந்துரையாடல்களுக்கு சிறப்பாக செயல்படுகிறது. அனைவரும் சோதித்துப் பாருங்கள்.',
-    tags: ['TamilAI', 'OpenSource', 'DeepTech'],
+    content: 'भारतीय शास्त्रीय नृत्य और कला संस्कृति। Margazhi season classical rehearsals in full swing! Connecting traditional roots with modern Bharat. 💃✨',
+    imageUrl: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?auto=format&fit=crop&w=1000&q=80',
+    tags: ['IndianCulture', 'Bharatanatyam', 'IncredibleIndia'],
     language: 'Tamil',
     likesCount: 1670,
     commentCount: 94,
@@ -214,7 +218,7 @@ export const INITIAL_POSTS: Post[] = [
     moderationStatus: 'approved',
     createdAt: '4h ago',
     region: 'Chennai',
-    locationName: 'IIT Madras Research Park'
+    locationName: 'Kalakshetra, Chennai'
   }
 ];
 

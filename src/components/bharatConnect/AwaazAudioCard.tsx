@@ -20,6 +20,9 @@ export const AwaazAudioCard: React.FC<AwaazAudioCardProps> = ({ post }) => {
     const audio = audioRef.current;
     if (!audio) return;
 
+    audio.volume = 1.0;
+    audio.muted = false;
+
     const updateTime = () => setCurrentTime(audio.currentTime);
     const updateDuration = () => {
       if (audio.duration && !isNaN(audio.duration)) {

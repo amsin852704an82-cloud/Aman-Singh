@@ -39,7 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [userProfile, setUserProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [isDemoMode, setIsDemoMode] = useState<boolean>(false);
+  const [isDemoMode, setIsDemoMode] = useState<boolean>(true);
 
   // Monitor auth state changes in real-time
   useEffect(() => {
