@@ -13,7 +13,11 @@ export type MainTab =
   | 'groups'
   | 'events'
   | 'marketplace'
-  | 'creator';
+  | 'creator'
+  | 'app'
+  | 'v2'
+  | 'v2.1'
+  | 'optimized';
 
 export interface User {
   id: string;

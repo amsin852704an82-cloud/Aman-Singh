@@ -85,25 +85,15 @@ export const AwaazAudioCard: React.FC<AwaazAudioCardProps> = ({ post }) => {
   const progressRatio = duration > 0 ? currentTime / duration : 0;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-amber-950/40 via-slate-950 to-orange-950/40 border border-orange-500/30 p-4 sm:p-5 shadow-lg select-none">
+    <div className="mx-3 mb-3 p-4 bg-gradient-to-br from-gray-900 to-gray-950 rounded-xl border border-gray-800 shadow-md select-none">
       {/* Hidden Native Audio Element */}
       <audio ref={audioRef} src={audioSrc} preload="metadata" />
 
-      {/* Background Soulful Glow */}
-      <div className="absolute top-0 right-0 w-48 h-48 bg-orange-500/10 rounded-full blur-3xl pointer-events-none" />
-
       {/* Top Header Tag: Awaaz (आवाज़) */}
       <div className="flex items-center justify-between gap-2 mb-3">
-        <div className="flex items-center gap-2">
-          <div className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-orange-500/20 to-amber-500/20 text-orange-400 border border-orange-500/40 text-[11px] font-bold flex items-center gap-1.5 shadow-sm">
-            <Mic className="w-3 h-3 text-orange-400" />
-            <span>आवाज़ (Awaaz Audio)</span>
-          </div>
-          {post.audioTitle && (
-            <span className="text-xs font-semibold text-slate-200 truncate max-w-[200px]">
-              {post.audioTitle}
-            </span>
-          )}
+        <div className="flex items-center space-x-2 text-orange-500 text-xs font-medium bg-orange-500/10 border border-orange-500/20 px-2.5 py-1 rounded-md w-fit">
+          <i className="fa-solid fa-microphone-lines animate-pulse"></i>
+          <span>आवाज़ (Awaaz Audio) • {post.audioTitle || 'कबीर दोहा - गुरु और...'}</span>
         </div>
 
         <button
@@ -117,61 +107,71 @@ export const AwaazAudioCard: React.FC<AwaazAudioCardProps> = ({ post }) => {
       </div>
 
       {/* Main Player Visualizer Area */}
-      <div className="flex items-center gap-4 py-2">
-        {/* Big Circular Play / Pause Button */}
+      <div className="flex items-center space-x-4">
+        {/* Play / Pause Button */}
         <button
           type="button"
           onClick={togglePlay}
-          className="w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-gradient-to-tr from-orange-500 via-amber-400 to-orange-600 hover:scale-105 active:scale-95 text-slate-950 flex items-center justify-center shadow-lg shadow-orange-500/30 transition shrink-0 cursor-pointer"
+          className="w-12 h-12 bg-gradient-to-r from-amber-500 to-orange-600 rounded-full flex items-center justify-center text-white shadow-lg hover:scale-105 active:scale-95 transition shrink-0 cursor-pointer"
           title={isPlaying ? 'रोकें (Pause)' : 'सुने (Play)'}
         >
           {isPlaying ? (
-            <Pause className="w-6 h-6 fill-slate-950 stroke-none" />
+            <i className="fa-solid fa-pause text-base"></i>
           ) : (
-            <Play className="w-6 h-6 fill-slate-950 stroke-none ml-1" />
+            <i className="fa-solid fa-play text-base ml-0.5"></i>
           )}
         </button>
 
-        {/* Dynamic Waveform Visualizer */}
-        <div className="flex-1 space-y-2 min-w-0">
-          <div className="h-10 flex items-center gap-1 sm:gap-1.5 px-1 overflow-hidden">
-            {barHeights.map((h, idx) => {
-              const isPast = (idx / barHeights.length) <= progressRatio;
+        {/* Dynamic Waveform Visualizer & Progress */}
+        <div className="flex-1 space-y-1.5 min-w-0">
+          <div className="flex items-end justify-end space-x-1 mb-1 h-7 text-gray-500">
+            {barHeights.slice(0, 12).map((h, idx) => {
+              const isPast = (idx / 12) <= progressRatio;
               return (
                 <div
                   key={idx}
-                  className="flex-1 rounded-full transition-all duration-150"
+                  className={`w-1 rounded-full transition-all duration-150 ${
+                    isPlaying ? 'animate-pulse' : ''
+                  }`}
                   style={{
-                    height: isPlaying ? `${Math.max(15, (h * (0.6 + Math.sin(currentTime * 5 + idx) * 0.4)))}%` : `${h * 0.65}%`,
-                    backgroundColor: isPast ? '#f97316' : '#334155'
+                    height: isPlaying ? `${Math.max(20, (h * (0.6 + Math.sin(currentTime * 5 + idx) * 0.4)))}%` : `${h * 0.55}%`,
+                    backgroundColor: isPast ? '#f97316' : '#4b5563'
                   }}
                 />
               );
             })}
           </div>
 
-          {/* Scrubber Range Bar */}
-          <input
-            type="range"
-            min={0}
-            max={duration || 100}
-            value={currentTime}
-            onChange={handleSeek}
-            className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-orange-500"
-          />
+          {/* Scrubber Track Bar */}
+          <div 
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              const clickPos = (e.clientX - rect.left) / rect.width;
+              if (audioRef.current && duration > 0) {
+                audioRef.current.currentTime = clickPos * duration;
+                setCurrentTime(clickPos * duration);
+              }
+            }}
+            className="w-full bg-gray-700 h-1.5 rounded-full overflow-hidden cursor-pointer relative"
+          >
+            <div 
+              className="bg-orange-500 h-full rounded-full transition-all duration-100" 
+              style={{ width: `${Math.min(100, Math.max(0, progressRatio * 100))}%` }}
+            />
+          </div>
 
-          {/* Time Progress */}
-          <div className="flex items-center justify-between text-[11px] font-mono text-slate-400 px-0.5">
+          {/* Time Progress Info */}
+          <div className="flex justify-between text-[10px] text-gray-400 font-mono pt-0.5">
             <span className="text-orange-400">{formatSeconds(currentTime)}</span>
-            <span>{formatSeconds(duration || (typeof post.audioDuration === 'number' ? post.audioDuration : 60))}</span>
+            <span>{formatSeconds(duration || (typeof post.audioDuration === 'number' ? post.audioDuration : 30))}</span>
           </div>
         </div>
       </div>
 
-      {/* Poetry / Lyrics Subtitle Quote if available */}
+      {/* Poetry / Lyrics Subtitle Quote matching user specification */}
       {post.caption && (
-        <div className="mt-3 pt-3 border-t border-slate-800/80">
-          <p className="text-xs sm:text-sm text-slate-200 font-serif italic leading-relaxed whitespace-pre-line text-center px-2">
+        <div className="mt-3 bg-slate-950/70 border-l-2 border-orange-500 p-3 rounded-r-lg text-center font-serif">
+          <p className="text-xs sm:text-sm italic text-amber-100/90 leading-relaxed whitespace-pre-line">
             "{post.caption}"
           </p>
         </div>

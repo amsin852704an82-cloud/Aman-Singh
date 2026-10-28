@@ -80,6 +80,9 @@ interface BharatConnectContextType {
   setIsPhoneFrame: (val: boolean | ((prev: boolean) => boolean)) => void;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (val: boolean) => void;
+  isSOSModalOpen: boolean;
+  setIsSOSModalOpen: (val: boolean) => void;
+  openSOSModal: () => void;
   toastMessage: string | null;
   setToastMessage: (msg: string | null) => void;
   
@@ -181,6 +184,8 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
   const [isPhoneFrame, setIsPhoneFrame] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isSOSModalOpen, setIsSOSModalOpen] = useState(false);
+  const openSOSModal = () => setIsSOSModalOpen(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Firebase auth state
@@ -984,6 +989,9 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
         setIsPhoneFrame,
         isAuthModalOpen,
         setIsAuthModalOpen,
+        isSOSModalOpen,
+        setIsSOSModalOpen,
+        openSOSModal,
         toastMessage,
         setToastMessage,
         firebaseUser,

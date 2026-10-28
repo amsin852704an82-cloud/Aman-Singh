@@ -150,6 +150,20 @@ export const INITIAL_STORIES: Story[] = [
 // Exact dummy data requested by user (for React Native / Web compatibility)
 export const initialDummyPosts = [
   {
+    id: 'kabir_guru_doha',
+    user: 'as9621302122',
+    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+    location: 'India',
+    type: 'audio',
+    content: 'गुरु गोविंद दोऊ खड़े, काके लागूं पांय।\nबलिहारी गुरु आपने, गोविंद दियो बताय॥ 🙏',
+    audioTitle: 'कबीर दोहा - गुरु और गोविंद',
+    audioDuration: '0:30',
+    audioURL: 'https://actions.google.com/sounds/v1/ambiences/outdoor_events.ogg',
+    likes: 0,
+    comments: 0,
+    timestamp: '5 दिन पहले',
+  },
+  {
     id: 'railway_1',
     user: 'railway_shayar_aman',
     avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100',
@@ -406,9 +420,9 @@ function createDummyPostModel(item: typeof initialDummyPosts[0]): Post {
     imageUrl: item.mediaUrl,
     imageURL: item.mediaUrl,
     mediaType: (item.type as 'audio' | 'image' | 'text'),
-    audioURL: isAudio ? 'https://actions.google.com/sounds/v1/ambiences/daytime_forest_bonanza.ogg' : undefined,
-    audioDuration: item.audioDuration || '0:45',
-    audioTitle: isAudio ? item.content : undefined,
+    audioURL: isAudio ? (('audioURL' in item && (item as any).audioURL) || 'https://actions.google.com/sounds/v1/ambiences/outdoor_events.ogg') : undefined,
+    audioDuration: item.audioDuration || '0:30',
+    audioTitle: ('audioTitle' in item && (item as any).audioTitle) || (isAudio ? item.content : undefined),
     likesCount: item.likes,
     likeCount: item.likes,
     commentsCount: item.comments,

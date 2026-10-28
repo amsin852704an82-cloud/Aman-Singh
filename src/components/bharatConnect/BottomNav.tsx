@@ -1,90 +1,88 @@
 import React from 'react';
 import { useBharatConnect } from '../../context/BharatConnectContext';
 import { MainTab } from '../../types/bharatConnect';
-import { Home, Clapperboard, Plus, Bell, GraduationCap } from 'lucide-react';
 
 export const BottomNav: React.FC = () => {
-  const { activeTab, setActiveTab, t, currentUser, unreadNotificationsCount } = useBharatConnect();
-
-  const navItems: { id: MainTab; label: string; icon: React.ReactNode; badge?: number }[] = [
-    {
-      id: 'home',
-      label: t.home,
-      icon: <Home className={`w-5 h-5 ${activeTab === 'home' ? 'fill-orange-400 text-orange-400' : 'text-slate-400'}`} />
-    },
-    {
-      id: 'hunar',
-      label: 'हुनर',
-      icon: <GraduationCap className={`w-5 h-5 ${activeTab === 'hunar' ? 'fill-orange-400 text-orange-400' : 'text-slate-400'}`} />
-    },
-    {
-      id: 'create',
-      label: t.create,
-      icon: (
-        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-500 to-amber-500 text-slate-950 flex items-center justify-center shadow-lg shadow-orange-500/30">
-          <Plus className="w-5 h-5 stroke-[2.5]" />
-        </div>
-      )
-    },
-    {
-      id: 'reels',
-      label: t.reels,
-      icon: <Clapperboard className={`w-5 h-5 ${activeTab === 'reels' ? 'fill-orange-400 text-orange-400' : 'text-slate-400'}`} />
-    },
-    {
-      id: 'notifications',
-      label: 'अलर्ट',
-      icon: <Bell className={`w-5 h-5 ${activeTab === 'notifications' ? 'fill-orange-400 text-orange-400' : 'text-slate-400'}`} />,
-      badge: unreadNotificationsCount
-    },
-    {
-      id: 'profile',
-      label: t.profile,
-      icon: (
-        <div className={`w-6 h-6 rounded-full overflow-hidden border-2 transition-all ${
-          activeTab === 'profile' ? 'border-orange-400 scale-105' : 'border-slate-600'
-        }`}>
-          <img src={currentUser.avatar} alt={currentUser.fullName} className="w-full h-full object-cover" />
-        </div>
-      )
-    }
-  ];
+  const { activeTab, setActiveTab, currentUser, unreadNotificationsCount } = useBharatConnect();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur-md border-t border-slate-800/80 px-1 sm:px-2 pt-1 pb-safe max-w-lg mx-auto sm:max-w-none">
-      <div className="grid grid-cols-6 items-center justify-items-center h-14">
-        {navItems.map((item) => {
-          const isActive = activeTab === item.id;
-          const isCreate = item.id === 'create';
+    <nav className="fixed bottom-0 left-0 right-0 bg-zinc-900 border-t border-zinc-800 px-4 py-2 flex justify-between items-center z-50 max-w-lg mx-auto sm:max-w-none shadow-2xl select-none">
+      {/* 1. होम (Home) */}
+      <button
+        onClick={() => setActiveTab('home')}
+        className={`flex flex-col items-center text-xs transition cursor-pointer min-w-[48px] ${
+          activeTab === 'home' ? 'text-orange-500 font-semibold' : 'text-zinc-400 hover:text-zinc-200'
+        }`}
+      >
+        <i className="fa-solid fa-house text-lg"></i>
+        <span className="mt-0.5 text-[11px]">होम</span>
+      </button>
 
-          return (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className="relative flex flex-col items-center justify-center w-full min-h-[48px] py-1 cursor-pointer select-none group"
-            >
-              <div className="relative">
-                {item.icon}
-                {item.badge && item.badge > 0 ? (
-                  <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 text-white rounded-full text-[9px] font-bold flex items-center justify-center font-mono">
-                    {item.badge}
-                  </span>
-                ) : null}
-              </div>
+      {/* 2. हुनर (Hunar / Skills) */}
+      <button
+        onClick={() => setActiveTab('hunar')}
+        className={`flex flex-col items-center text-xs transition cursor-pointer min-w-[48px] ${
+          activeTab === 'hunar' ? 'text-orange-500 font-semibold' : 'text-zinc-400 hover:text-zinc-200'
+        }`}
+      >
+        <i className="fa-solid fa-graduation-cap text-lg"></i>
+        <span className="mt-0.5 text-[11px]">हुनर</span>
+      </button>
 
-              {!isCreate && (
-                <span
-                  className={`text-[10px] font-medium tracking-tight mt-1 transition-colors ${
-                    isActive ? 'text-orange-400 font-semibold' : 'text-slate-400 group-hover:text-slate-200'
-                  }`}
-                >
-                  {item.label}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      {/* 3. Central Plus Button (नई पोस्ट) */}
+      <button
+        onClick={() => setActiveTab('create')}
+        className="w-12 h-12 bg-gradient-to-tr from-amber-500 to-orange-600 text-zinc-950 rounded-full flex items-center justify-center text-xl shadow-lg -mt-5 border-4 border-zinc-950 hover:scale-105 active:scale-95 transition cursor-pointer"
+        title="नई पोस्ट बनाएं"
+      >
+        <i className="fa-solid fa-plus font-bold"></i>
+      </button>
+
+      {/* 4. रील्स (Reels) */}
+      <button
+        onClick={() => setActiveTab('reels')}
+        className={`flex flex-col items-center text-xs transition cursor-pointer min-w-[48px] ${
+          activeTab === 'reels' ? 'text-orange-500 font-semibold' : 'text-zinc-400 hover:text-zinc-200'
+        }`}
+      >
+        <i className="fa-solid fa-video text-lg"></i>
+        <span className="mt-0.5 text-[11px]">रील्स</span>
+      </button>
+
+      {/* 5. अलर्ट (Alerts / Notifications) */}
+      <button
+        onClick={() => setActiveTab('notifications')}
+        className={`flex flex-col items-center text-xs transition cursor-pointer relative min-w-[48px] ${
+          activeTab === 'notifications' ? 'text-orange-500 font-semibold' : 'text-zinc-400 hover:text-zinc-200'
+        }`}
+      >
+        <div className="relative">
+          <i className="fa-solid fa-bell text-lg"></i>
+          {unreadNotificationsCount > 0 && (
+            <span className="absolute -top-1 -right-2 bg-orange-500 text-zinc-950 rounded-full text-[9px] w-4 h-4 flex items-center justify-center font-bold">
+              {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+            </span>
+          )}
+        </div>
+        <span className="mt-0.5 text-[11px]">अलर्ट</span>
+      </button>
+
+      {/* 6. प्रोफ़ाइल (Profile) */}
+      <button
+        onClick={() => setActiveTab('profile')}
+        className={`flex flex-col items-center text-xs transition cursor-pointer min-w-[48px] ${
+          activeTab === 'profile' ? 'text-orange-500 font-semibold' : 'text-zinc-400 hover:text-zinc-200'
+        }`}
+      >
+        <img
+          src={currentUser.photoURL || currentUser.avatar}
+          className={`w-5 h-5 rounded-full object-cover mt-0.5 border ${
+            activeTab === 'profile' ? 'border-orange-500 scale-105' : 'border-zinc-700'
+          }`}
+          alt="Profile"
+        />
+        <span className="mt-0.5 text-[11px]">प्रोफ़ाइल</span>
+      </button>
     </nav>
   );
 };

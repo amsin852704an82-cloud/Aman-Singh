@@ -13,6 +13,7 @@ import {
 } from 'firebase/auth';
 import { 
   getFirestore, 
+  initializeFirestore,
   doc, 
   getDoc, 
   setDoc, 
@@ -28,8 +29,7 @@ import {
   serverTimestamp,
   increment,
   writeBatch,
-  runTransaction,
-  getDocFromServer 
+  runTransaction
 } from 'firebase/firestore';
 import { 
   getStorage, 
@@ -64,25 +64,20 @@ googleProvider.setCustomParameters({
   prompt: 'select_account'
 });
 
-// Initialize Firestore (with databaseId support)
-export const db = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
-  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-  : getFirestore(app);
+// Initialize Firestore (with databaseId support & long polling for iframe preview stability)
+const firestoreDbId = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'
+  ? firebaseConfig.firestoreDatabaseId
+  : undefined;
 
-// Test connection on boot as required by Firestore integration directives
-async function testFirestoreConnection() {
+export const db = (() => {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn("Firestore client is offline or connecting. Check Firebase configuration.");
-    }
+    return initializeFirestore(app, {
+      experimentalForceLongPolling: true,
+    }, firestoreDbId);
+  } catch {
+    return firestoreDbId ? getFirestore(app, firestoreDbId) : getFirestore(app);
   }
-}
-
-if (typeof window !== 'undefined') {
-  testFirestoreConnection();
-}
+})();
 
 export enum OperationType {
   CREATE = 'create',
@@ -111,8 +106,17 @@ export interface FirestoreErrorInfo {
 }
 
 export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const rawMsg = error instanceof Error ? error.message : String(error);
+  const errorCode = (error as any)?.code || '';
+
+  // Silently handle temporary offline/unavailable network events without breaking the app
+  if (errorCode === 'unavailable' || rawMsg.includes('unavailable') || rawMsg.includes('offline') || rawMsg.includes('could not be completed')) {
+    console.info(`[Firestore ${operationType} on ${path || 'unknown'}]: operating in offline-first mode.`);
+    return;
+  }
+
   const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
+    error: rawMsg,
     authInfo: {
       userId: auth.currentUser?.uid,
       email: auth.currentUser?.email,

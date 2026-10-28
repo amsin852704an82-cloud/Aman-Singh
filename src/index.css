@@ -39,3 +39,60 @@
   background: linear-gradient(135deg, #f97316 0%, #ffffff 50%, #10b981 100%);
 }
 
+/* Custom theme colors matching user specification */
+:root {
+  --bharat-orange: #F97316;
+  --bharat-saffron: #FF9933;
+  --bharat-navy: #0B0F19;
+  --bharat-card: #161F30;
+  --bharat-cardHover: #1E293B;
+  --bharat-border: #2A364F;
+  --bharat-textMuted: #94A3B8;
+}
+
+.bg-bharat-navy { background-color: #0B0F19; }
+.bg-bharat-card { background-color: #161F30; }
+.bg-bharat-cardHover { background-color: #1E293B; }
+.border-bharat-border { border-color: #2A364F; }
+.text-bharat-textMuted { color: #94A3B8; }
+.text-bharat-orange { color: #F97316; }
+.text-bharat-saffron { color: #FF9933; }
+
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0B0F19;
+}
+::-webkit-scrollbar-thumb {
+  background: #2A364F;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #F97316;
+}
+
+/* Animated pulsing audio bars */
+.audio-bar {
+  transition: height 0.2s ease-in-out;
+}
+.playing .audio-bar {
+  animation: pulse-height 0.8s infinite ease-in-out alternate;
+}
+@keyframes pulse-height {
+  0% { transform: scaleY(0.3); }
+  100% { transform: scaleY(1.1); }
+}
+
+/* Heart like bump animation */
+@keyframes heart-bump {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.35); }
+  100% { transform: scale(1); }
+}
+.liked-heart {
+  animation: heart-bump 0.35s ease-in-out;
+}
+

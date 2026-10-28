@@ -24,7 +24,8 @@ import {
   Check,
   Loader2,
   Mic,
-  Radio
+  Radio,
+  AlertTriangle
 } from 'lucide-react';
 import { AwaazAudioCard } from './AwaazAudioCard';
 import { AwaazRecordModal } from './AwaazRecordModal';
@@ -32,6 +33,7 @@ import { FloatingActionButton } from './FloatingActionButton';
 import { SkeletonFeedCard } from './SkeletonFeedCard';
 import { ProgressiveImage } from './ProgressiveImage';
 import { triggerHaptic } from '../../lib/deviceOptimization';
+import { FeedComponent } from './FeedComponent';
 
 export const HomeFeed: React.FC = () => {
   const { 
@@ -49,7 +51,8 @@ export const HomeFeed: React.FC = () => {
     deletePost,
     updatePostCaption,
     openUserProfile,
-    followingIds
+    followingIds,
+    openSOSModal
   } = useBharatConnect();
 
   const [activeStory, setActiveStory] = useState<Story | null>(null);
@@ -61,7 +64,7 @@ export const HomeFeed: React.FC = () => {
   const [openMenuPostId, setOpenMenuPostId] = useState<string | null>(null);
   const [likedAnimPostId, setLikedAnimPostId] = useState<string | null>(null);
   const [inlineComments, setInlineComments] = useState<{ [postId: string]: string }>({});
-  const [feedTab, setFeedTab] = useState<'explore' | 'following' | 'awaaz'>('explore');
+  const [feedTab, setFeedTab] = useState<'explore' | 'following' | 'awaaz' | 'live'>('explore');
   const [isAwaazRecordOpen, setIsAwaazRecordOpen] = useState(false);
   const [visibleCount, setVisibleCount] = useState(10);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -122,6 +125,23 @@ export const HomeFeed: React.FC = () => {
     setToastMessage('पोस्ट लिंक कॉपी हो गया! (Post Link Copied)');
   };
 
+  const handleWhatsAppShare = (post: Post) => {
+    const pAuthor = post.author?.fullName || post.authorName || 'BharatConnect Creator';
+    const pHandle = post.author?.handle || `@${post.author?.username || 'user'}`;
+    const pText = post.caption || post.text || '';
+    const pTitle = post.audioTitle || 'BharatConnect Post';
+    const link = `https://bharatconnect.app/p/${post.id}?ref=${currentUser.username || 'creator'}`;
+
+    const textToShare = `🚩 *${pTitle}*\n\n"${pText}"\n\n👤 क्रिएटर: ${pAuthor} (${pHandle})\n📍 स्थान: ${post.locationName || 'भारत 🇮🇳'}\n\n📲 भारत कनेक्ट (BharatConnect) पर देखें व जुड़ें:\n${link}\n\n#BharatConnect #Awaaz #DigitalBharat`;
+
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(textToShare);
+    }
+    const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(textToShare)}`;
+    window.location.href = waUrl;
+    setToastMessage('WhatsApp पर शेयर किया जा रहा है! (Watermark व लिंक सहित)');
+  };
+
   const handleInlineCommentSubmit = (postId: string, e: React.FormEvent) => {
     e.preventDefault();
     const txt = inlineComments[postId]?.trim();
@@ -138,132 +158,159 @@ export const HomeFeed: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Main Column (8 cols on lg) */}
         <div className="lg:col-span-7 space-y-4">
-          {/* Authenticated User Profile Banner on Home Feed */}
-          <div className="bg-gradient-to-r from-orange-950/40 via-slate-900 to-emerald-950/40 border border-slate-800 rounded-2xl p-4 flex items-center justify-between gap-3 shadow-sm backdrop-blur-sm">
-            <div className="flex items-center gap-3 min-w-0">
+          {/* USER WELCOME CARD matching user's exact BharatConnect style */}
+          <div className="bg-gradient-to-r from-bharat-card to-slate-900 border border-bharat-border rounded-2xl p-3.5 flex items-center justify-between shadow-lg">
+            <div className="flex items-center gap-3">
               <div className="relative shrink-0">
-                <div className="w-12 h-12 rounded-full p-0.5 bg-gradient-to-tr from-orange-500 via-amber-400 to-emerald-500 shadow-md">
-                  <img
-                    src={currentUser.photoURL || currentUser.avatar}
-                    alt={currentUser.name || currentUser.fullName}
-                    className="w-full h-full rounded-full object-cover border-2 border-slate-950"
-                  />
-                </div>
-                <div className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-emerald-500 border-2 border-slate-950 rounded-full" title="सक्रिय (Online)" />
+                <img
+                  src={currentUser.photoURL || currentUser.avatar}
+                  alt={currentUser.name || currentUser.fullName}
+                  className="w-12 h-12 rounded-full object-cover border-2 border-orange-500"
+                />
+                <span className="w-3.5 h-3.5 bg-emerald-500 border-2 border-bharat-navy rounded-full absolute bottom-0 right-0" title="सक्रिय (Online)" />
               </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[11px] text-orange-400 font-semibold">नमस्ते 🇮🇳</span>
-                  <span className="text-sm font-bold text-white truncate max-w-[180px]">
-                    {currentUser.name || currentUser.fullName}
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-semibold text-white text-base">नमस्ते 🇮🇳 {currentUser.name || currentUser.fullName}</span>
+                  <span title="Verified Creator">
+                    <CheckCircle2 className="w-4 h-4 text-sky-400 shrink-0" />
                   </span>
-                  {currentUser.verified && (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 fill-blue-400/20 shrink-0" />
-                  )}
                 </div>
-                <div className="text-[11px] text-slate-400 truncate">
-                  {currentUser.handle} {currentUser.email && `· ${currentUser.email}`}
-                </div>
+                <span className="text-xs text-bharat-textMuted font-mono">
+                  {currentUser.handle || `@${currentUser.username || 'user'}`}
+                </span>
               </div>
             </div>
-
             <button
               onClick={() => setActiveTab('create')}
-              className="px-3 py-2 rounded-xl bg-orange-500/15 hover:bg-orange-500/25 border border-orange-500/30 text-orange-400 text-xs font-semibold flex items-center gap-1.5 transition active:scale-95 shrink-0"
+              className="w-9 h-9 rounded-full bg-orange-500/10 hover:bg-orange-500/20 text-orange-500 border border-orange-500/30 flex items-center justify-center transition active:scale-95 cursor-pointer shadow-sm"
               title="नई पोस्ट बनाएं"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">नई पोस्ट (+)</span>
+              <Plus className="w-4 h-4 stroke-[2.5]" />
             </button>
           </div>
 
-          {/* Stories Horizontal Strip */}
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 overflow-x-auto no-scrollbar shadow-sm">
-            <div className="flex items-center gap-3.5 min-w-max">
-              {/* Current User Story / Add Story */}
-              <div 
-                onClick={() => setActiveTab('create')}
-                className="flex flex-col items-center gap-1.5 cursor-pointer group select-none"
-              >
-                <div className="relative w-15 h-15 rounded-full p-0.5 border border-slate-700">
-                  <img
-                    src={currentUser.photoURL || currentUser.avatar}
-                    alt={currentUser.name || currentUser.fullName}
-                    className="w-full h-full rounded-full object-cover"
-                  />
-                  <div className="absolute bottom-0 right-0 w-4.5 h-4.5 bg-orange-500 text-white rounded-full flex items-center justify-center border-2 border-slate-900">
-                    <Plus className="w-3 h-3 stroke-[3]" />
-                  </div>
-                </div>
-                <span className="text-[11px] font-medium text-slate-300 truncate max-w-[64px]">
-                  {currentUser.name ? currentUser.name.split(' ')[0] : 'आपकी स्टोरी'}
-                </span>
+          {/* BHARAT SAHARA SOS EMERGENCY ALERT BANNER */}
+          <div 
+            onClick={openSOSModal}
+            className="bg-gradient-to-r from-red-950/60 via-slate-900 to-orange-950/40 border border-red-500/40 rounded-2xl p-3 sm:p-3.5 flex items-center justify-between gap-3 shadow-lg hover:border-red-500/60 transition cursor-pointer select-none"
+          >
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-10 h-10 rounded-xl bg-red-600/20 border border-red-500/40 text-red-400 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 animate-pulse text-red-500 stroke-[2.5]" />
               </div>
-
-              {/* Other Stories */}
-              {stories.map((story) => (
-                <div
-                  key={story.id}
-                  onClick={() => setActiveStory(story)}
-                  className="flex flex-col items-center gap-1.5 cursor-pointer group select-none"
-                >
-                  <div className={`w-15 h-15 rounded-full p-0.5 transition-transform group-hover:scale-105 ${
-                    story.hasSeen
-                      ? 'border-2 border-slate-700'
-                      : 'bg-gradient-to-tr from-orange-500 via-amber-400 to-emerald-400'
-                  }`}>
-                    <img
-                      src={story.author.avatar}
-                      alt={story.author.fullName}
-                      className="w-full h-full rounded-full object-cover border-2 border-slate-900"
-                    />
-                  </div>
-                  <span className="text-[11px] font-medium text-slate-300 truncate max-w-[64px]">
-                    {story.author.fullName.split(' ')[0]}
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-white text-xs sm:text-sm">
+                    भारत सहारा <span className="text-red-400">(Bharat SOS Network)</span>
+                  </span>
+                  <span className="text-[9px] bg-red-600 text-white font-extrabold px-1.5 py-0.2 rounded-full uppercase">
+                    LIVE
                   </span>
                 </div>
-              ))}
+                <p className="text-[11px] text-slate-300 truncate mt-0.5">
+                  5-10 किमी में स्थानीय आपातकालीन मदद, रक्तदान व सुरक्षा सेवाएं
+                </p>
+              </div>
             </div>
+            <span className="px-3 py-1.5 rounded-xl bg-red-600/30 hover:bg-red-600/40 text-red-300 border border-red-500/40 text-xs font-bold shrink-0 transition">
+              खोलें →
+            </span>
           </div>
 
-          {/* Feed Switcher Tabs: Explore vs Following vs Awaaz */}
-          <div className="flex items-center gap-1.5 sm:gap-2 bg-slate-900/80 p-1.5 rounded-2xl border border-slate-800 shadow-sm">
+          {/* Stories Bar matching user's exact specification */}
+          <section className="py-3 px-3 bg-gray-900/50 border border-gray-800 rounded-2xl overflow-x-auto flex space-x-3 no-scrollbar shadow-sm">
+            {/* Add Story */}
+            <div 
+              onClick={() => setActiveTab('create')}
+              className="flex flex-col items-center flex-shrink-0 cursor-pointer group"
+            >
+              <div className="w-16 h-16 rounded-full border-2 border-dashed border-gray-600 flex items-center justify-center bg-gray-800 text-orange-500 relative transition group-hover:border-orange-500">
+                <i className="fa-solid fa-plus text-xl"></i>
+              </div>
+              <span className="text-xs mt-1 text-gray-400">आपकी स्टोरी</span>
+            </div>
+
+            {/* User Stories */}
+            {stories.map((story) => (
+              <div
+                key={story.id}
+                onClick={() => setActiveStory(story)}
+                className="flex flex-col items-center flex-shrink-0 cursor-pointer group"
+              >
+                <div className={`w-16 h-16 rounded-full p-0.5 transition-transform group-hover:scale-105 ${
+                  story.hasSeen
+                    ? 'border-2 border-gray-700'
+                    : 'bg-gradient-to-tr from-yellow-400 to-orange-500'
+                }`}>
+                  <img
+                    src={story.author.avatar}
+                    alt={story.author.fullName}
+                    className="w-full h-full object-cover rounded-full border-2 border-slate-950"
+                  />
+                </div>
+                <span className="text-xs mt-1 text-gray-300 truncate max-w-[68px]">
+                  {story.author.fullName.split(' ')[0]}
+                </span>
+              </div>
+            ))}
+          </section>
+
+          {/* Main Feed Tabs (Explore / Following / Awaaz) */}
+          <div className="flex border-b border-zinc-800 text-sm font-semibold text-zinc-400 bg-zinc-900/60 rounded-xl overflow-hidden shadow-sm">
             <button
               onClick={() => setFeedTab('explore')}
-              className={`flex-1 py-2 text-[11px] sm:text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer ${
+              className={`flex-1 text-center py-2.5 transition flex items-center justify-center gap-1.5 cursor-pointer ${
                 feedTab === 'explore'
-                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'border-b-2 border-orange-500 text-orange-500 font-bold'
+                  : 'hover:text-zinc-200'
               }`}
             >
-              <Sparkles className="w-3.5 h-3.5" />
+              <i className="fa-solid fa-compass text-xs"></i>
               <span>एक्सप्लोर</span>
             </button>
 
             <button
               onClick={() => setFeedTab('following')}
-              className={`flex-1 py-2 text-[11px] sm:text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer ${
+              className={`flex-1 text-center py-2.5 transition flex items-center justify-center gap-1.5 cursor-pointer ${
                 feedTab === 'following'
-                  ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md shadow-orange-500/20'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'border-b-2 border-orange-500 text-orange-500 font-bold'
+                  : 'hover:text-zinc-200'
               }`}
             >
-              <Users className="w-3.5 h-3.5" />
+              <i className="fa-solid fa-user-group text-xs"></i>
               <span>फ़ॉलोइंग ({followingIds.length})</span>
             </button>
 
             <button
               onClick={() => setFeedTab('awaaz')}
-              className={`flex-1 py-2 text-[11px] sm:text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer ${
+              className={`flex-1 text-center py-2.5 transition flex items-center justify-center gap-1.5 cursor-pointer ${
                 feedTab === 'awaaz'
-                  ? 'bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 text-white shadow-md shadow-purple-500/20'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'border-b-2 border-orange-500 text-orange-500 font-bold'
+                  : 'hover:text-zinc-200'
               }`}
             >
-              <Mic className="w-3.5 h-3.5 text-orange-400" />
-              <span>🎙️ आवाज़</span>
+              <i className="fa-solid fa-microphone text-xs"></i>
+              <span>आवाज़</span>
+            </button>
+
+            <button
+              onClick={() => setFeedTab('live')}
+              className={`flex-1 text-center py-2.5 transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                feedTab === 'live'
+                  ? 'border-b-2 border-orange-500 text-orange-500 font-bold'
+                  : 'hover:text-zinc-200'
+              }`}
+            >
+              <i className="fa-solid fa-bolt text-xs text-amber-400"></i>
+              <span>लाइव फीड ⚡</span>
             </button>
           </div>
+
+          {/* Real-time WebSocket Feed when Live tab is selected */}
+          {feedTab === 'live' && (
+            <FeedComponent currentUserId={currentUser?.username || 'as9621302122'} />
+          )}
 
           {/* Awaaz Banner when Awaaz tab is selected */}
           {feedTab === 'awaaz' && (
@@ -421,10 +468,23 @@ export const HomeFeed: React.FC = () => {
 
                       {/* Actions: 3-dot options menu for own posts, report for others */}
                       <div className="relative flex items-center gap-1.5">
-                        {isMyPost && (
+                        {isMyPost ? (
                           <span className="hidden sm:inline px-2 py-0.5 rounded-full bg-orange-500/10 text-orange-400 border border-orange-500/30 text-[10px] font-bold">
                             आपकी पोस्ट
                           </span>
+                        ) : (
+                          <button
+                            onClick={() => toggleFollowUser(post.author)}
+                            className="text-orange-500 bg-orange-500/10 hover:bg-orange-500/20 px-3 py-1 rounded-full text-xs font-semibold transition flex items-center gap-1 active:scale-95 cursor-pointer"
+                            title="फ़ॉलो करें"
+                          >
+                            <i className="fa-brands fa-whatsapp text-xs mr-0.5"></i>
+                            <span>
+                              {followingIds.includes(post.author.id) || (post.author.uid && followingIds.includes(post.author.uid))
+                                ? 'फॉलोइंग'
+                                : 'फॉलो करें'}
+                            </span>
+                          </button>
                         )}
 
                         <button
@@ -565,7 +625,7 @@ export const HomeFeed: React.FC = () => {
                     {/* Action Buttons Bar */}
                     <div className="p-3.5 pb-2">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2 sm:gap-3">
                           {/* Like button with haptic feedback */}
                           <button
                             onClick={() => handleLikeClick(post.id)}
@@ -573,7 +633,7 @@ export const HomeFeed: React.FC = () => {
                               post.isLiked ? 'text-rose-500' : 'text-slate-200 hover:text-rose-400'
                             }`}
                           >
-                            <Heart className={`w-6 h-6 ${post.isLiked ? 'fill-rose-500 text-rose-500' : ''}`} />
+                            <Heart className={`w-6 h-6 ${post.isLiked ? 'fill-rose-500 text-rose-500 liked-heart' : ''}`} />
                           </button>
 
                           {/* Comment button */}
@@ -587,9 +647,20 @@ export const HomeFeed: React.FC = () => {
                           {/* Share button */}
                           <button
                             onClick={() => handleShare(post)}
-                            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-200 hover:text-emerald-400 transition-colors cursor-pointer"
+                            className="min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-200 hover:text-blue-400 transition-colors cursor-pointer"
+                            title="लिंक कॉपी करें"
                           >
                             <Send className="w-5 h-5 -rotate-12" />
+                          </button>
+
+                          {/* 1-Click WhatsApp Share with Watermark */}
+                          <button
+                            onClick={() => handleWhatsAppShare(post)}
+                            className="px-2.5 py-1.5 rounded-xl bg-emerald-600/15 hover:bg-emerald-600/25 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-sm"
+                            title="1-क्लिक WhatsApp स्टेटस व चैट शेयर (Watermark सहित)"
+                          >
+                            <i className="fa-brands fa-whatsapp text-sm text-emerald-400"></i>
+                            <span className="hidden sm:inline">WhatsApp</span>
                           </button>
                         </div>
 

@@ -1,4 +1,6 @@
 import './instrument';
+import http from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 import express, { Request, Response, NextFunction } from 'express';
 import * as Sentry from '@sentry/node';
 import path from 'path';
@@ -41,6 +43,36 @@ async function startServer() {
   validateEnvironment();
 
   const app = express();
+  const server = http.createServer(app);
+  const io = new SocketIOServer(server, {
+    cors: {
+      origin: '*',
+      methods: ['GET', 'POST']
+    }
+  });
+
+  // Real-time Feed In-Memory Cache (Redis-compatible Fan-Out architecture)
+  const feedCache = new Map<string, Array<any>>();
+
+  // WebSocket Connection Lifecycle
+  io.on('connection', (socket) => {
+    logger.info(`⚡ User connected to WebSocket: ${socket.id}`);
+
+    // Join specific user feed room or following group
+    socket.on('join_feed', (userId: string) => {
+      const room = `user_feed_${userId}`;
+      socket.join(room);
+      logger.info(`User ${userId} joined room ${room}`);
+
+      const cached = feedCache.get(`feed:${userId}`) || feedCache.get('feed:global') || [];
+      socket.emit('initial_feed', cached);
+    });
+
+    socket.on('disconnect', () => {
+      logger.info(`WebSocket user disconnected: ${socket.id}`);
+    });
+  });
+
   // Support --port CLI argument passed by dev supervisor while defaulting safely to 3000
   const portArgIndex = process.argv.indexOf('--port');
   const cliPort = portArgIndex !== -1 && process.argv[portArgIndex + 1] ? Number(process.argv[portArgIndex + 1]) : null;
@@ -687,6 +719,63 @@ async function startServer() {
     });
   });
 
+  // ==========================================
+  // REAL-TIME POSTS API WITH WEBSOCKET FAN-OUT
+  // ==========================================
+  // जब कोई यूजर नया पोस्ट पब्लिश करे (API Endpoint)
+  app.post('/api/posts', async (req: Request, res: Response) => {
+    const { userId, username, content, imageURL, audioTitle, location } = req.body;
+
+    const effectiveUserId = userId || 'as9621302122';
+    const effectiveUsername = username || 'as9621302122';
+
+    const newPost = {
+      id: Date.now().toString(),
+      userId: effectiveUserId,
+      username: effectiveUsername,
+      authorName: effectiveUsername,
+      content: content || 'नया विचार साझा किया।',
+      text: content || '',
+      caption: content || '',
+      image: imageURL || null,
+      audioTitle: audioTitle || null,
+      location: location || 'India',
+      createdAt: new Date().toISOString(),
+      likesCount: 0,
+      tags: content ? (content.match(/#[a-zA-Z0-9_]+/g) || ['#BharatConnect', '#RealTime']) : ['#BharatConnect', '#RealTime']
+    };
+
+    try {
+      // 1. Redis/In-memory Cache Fan-Out
+      const existingUserFeed = feedCache.get(`feed:${effectiveUserId}`) || [];
+      feedCache.set(`feed:${effectiveUserId}`, [newPost, ...existingUserFeed.slice(0, 49)]);
+
+      const existingGlobalFeed = feedCache.get('feed:global') || [];
+      feedCache.set('feed:global', [newPost, ...existingGlobalFeed.slice(0, 49)]);
+
+      // 2. WebSocket के जरिए जुड़े हुए सभी फॉलोअर्स को रियल-टाइम नोटिफिकेशन/पहुँच भेजें
+      io.emit('new_post_event', newPost);
+      io.to(`user_feed_${effectiveUserId}`).emit('user_post_event', newPost);
+
+      logger.info(`⚡ [RealTime] Post ${newPost.id} published by @${newPost.username} and pushed via WebSocket!`);
+
+      res.status(201).json({
+        success: true,
+        message: 'Post published and pushed real-time!',
+        post: newPost
+      });
+    } catch (error: any) {
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
+  // GET /api/posts to retrieve feed
+  app.get('/api/posts', (req: Request, res: Response) => {
+    const userId = req.query.userId as string;
+    const posts = (userId ? feedCache.get(`feed:${userId}`) : null) || feedCache.get('feed:global') || [];
+    res.json({ success: true, posts });
+  });
+
   // Sentry Test Error Endpoint
   app.get('/api/example-error', (req: Request, res: Response, next: NextFunction) => {
     next(new Error('BharatConnect test error'));
@@ -720,8 +809,8 @@ async function startServer() {
     app.use(vite.middlewares);
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    logger.info(`🇮🇳 BharatConnect Production Hardened Server running on port ${PORT}`);
+  server.listen(PORT, '0.0.0.0', () => {
+    logger.info(`🇮🇳 BharatConnect Production Hardened Server running on port ${PORT} with WebSockets & Real-Time Fan-Out`);
     logger.info(`🛡️ Security middleware, Helmet CSP, Rate Limiting, and Zod validation active`);
   });
 }

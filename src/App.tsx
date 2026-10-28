@@ -22,10 +22,15 @@ import { MarketplaceView } from './components/bharatConnect/MarketplaceView';
 import { CreatorView } from './components/bharatConnect/CreatorView';
 import { LoginPage } from './components/bharatConnect/LoginPage';
 import { AuthModal } from './components/bharatConnect/AuthModal';
+import { SOSModal } from './components/bharatConnect/SOSModal';
 import { UserProfileModal } from './components/bharatConnect/UserProfileModal';
 import { LandingPageView } from './components/bharatConnect/LandingPageView';
 import { NetworkStatusBanner } from './components/bharatConnect/NetworkStatusBanner';
 import { AppErrorBoundary } from './components/bharatConnect/AppErrorBoundary';
+import BharatConnectApp from './components/bharatConnect/BharatConnectApp';
+import BharatConnectV2 from './components/bharatConnect/BharatConnectV2';
+import UpgradedBharatConnect from './components/bharatConnect/UpgradedBharatConnect';
+import OptimizedBharatConnect from './components/bharatConnect/OptimizedBharatConnect';
 import { CheckCircle2, Loader2, Sparkles } from 'lucide-react';
 import { initGoogleAnalytics, trackPageView } from './lib/analytics';
 
@@ -111,10 +116,60 @@ const BharatConnectContent: React.FC = () => {
         return <MarketplaceView />;
       case 'creator':
         return <CreatorView />;
+      case 'app':
+        return <BharatConnectApp />;
+      case 'v2':
+        return <BharatConnectV2 />;
+      case 'v2.1':
+        return <UpgradedBharatConnect />;
+      case 'optimized':
+        return <OptimizedBharatConnect />;
       default:
         return <HomeFeed />;
     }
   };
+
+  // If activeTab is explicitly 'optimized', render the OptimizedBharatConnect experience
+  if (activeTab === 'optimized') {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center">
+        <OptimizedBharatConnect />
+      </div>
+    );
+  }
+
+  // If activeTab is explicitly 'v2.1', render the UpgradedBharatConnect experience
+  if (activeTab === 'v2.1') {
+    return (
+      <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center">
+        <UpgradedBharatConnect />
+      </div>
+    );
+  }
+
+  // If activeTab is explicitly 'v2', render the BharatConnectV2 full-page experience
+  if (activeTab === 'v2') {
+    return (
+      <div className="min-h-screen bg-slate-950">
+        <BharatConnectV2 />
+      </div>
+    );
+  }
+
+  // If activeTab is explicitly 'app', render the mobile BharatConnectApp experience
+  if (activeTab === 'app') {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex flex-col justify-center items-center">
+        <BharatConnectApp />
+        {toastMessage && (
+          <div className="fixed top-16 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-2.5 bg-slate-900/95 border border-orange-500/50 rounded-2xl shadow-2xl backdrop-blur-md text-xs text-slate-100 animate-in fade-in slide-in-from-top-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span className="font-medium">{toastMessage}</span>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col antialiased selection:bg-orange-500 selection:text-white font-sans">
@@ -164,6 +219,9 @@ const BharatConnectContent: React.FC = () => {
 
       {/* Login & Signup Modal for switching accounts inside */}
       <AuthModal />
+
+      {/* Bharat Sahara SOS Emergency Network Modal */}
+      <SOSModal />
 
       {/* Global Interactive Toast Notification */}
       {toastMessage && (
