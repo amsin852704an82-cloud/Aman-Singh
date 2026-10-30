@@ -21,7 +21,8 @@ import {
   ShoppingBag,
   BarChart3,
   Search,
-  Sparkles
+  Sparkles,
+  TrendingUp
 } from 'lucide-react';
 import { InboxModal } from './InboxModal';
 
@@ -41,7 +42,9 @@ export const Navbar: React.FC = () => {
     firebaseUser,
     setIsAuthModalOpen,
     currentUser,
-    openSOSModal
+    openSOSModal,
+    openPromoteModal,
+    activeCampaign
   } = useBharatConnect();
 
   const [isInboxOpen, setIsInboxOpen] = React.useState(false);
@@ -98,6 +101,19 @@ export const Navbar: React.FC = () => {
           >
             <span className="w-2 h-2 rounded-full bg-red-500 animate-ping inline-block" />
             <span>SOS</span>
+          </button>
+
+          {/* Promote / Boost Shortcut Button */}
+          <button
+            onClick={() => openPromoteModal(null, activeCampaign ? 4 : 1)}
+            className="flex items-center gap-1.5 text-xs bg-gradient-to-r from-orange-500/20 to-amber-500/20 hover:from-orange-500/30 hover:to-amber-500/30 text-orange-400 border border-orange-500/40 px-2.5 sm:px-3 py-1.5 rounded-full font-bold transition active:scale-95 cursor-pointer shadow-sm"
+            title="प्रमोट करें (Promote / Boost)"
+          >
+            <TrendingUp className="w-3.5 h-3.5 text-orange-400" />
+            <span className="hidden sm:inline">प्रमोट (Boost)</span>
+            {activeCampaign && (
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            )}
           </button>
 
           {/* Compass / Explore Button */}

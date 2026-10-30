@@ -18,7 +18,6 @@ import {
 import { useBharatConnect } from '../../context/BharatConnectContext';
 import { useAuth } from '../../context/AuthContext';
 import { Post as FirestorePost } from '../../types/bharatConnect';
-import { subscribeToFirestorePosts } from '../../lib/postService';
 
 // पोस्ट डेटा इंटरफेस
 interface Post {
@@ -35,7 +34,7 @@ interface Post {
 }
 
 export default function OptimizedBharatConnect() {
-  const { openSOSModal, setToastMessage, setActiveTab: setGlobalActiveTab } = useBharatConnect();
+  const { openSOSModal, setToastMessage, setActiveTab: setGlobalActiveTab, posts: globalPosts } = useBharatConnect();
   const { user: firebaseAuthUser } = useAuth();
 
   // स्टेट मैनेजमेंट
@@ -78,31 +77,27 @@ export default function OptimizedBharatConnect() {
   const [currentLang, setCurrentLang] = useState<'HI' | 'EN' | 'GU' | 'MR'>('HI');
   const [activeTab, setActiveTab] = useState<'home' | 'hunar' | 'reels' | 'profile'>('home');
 
-  // सिंक विद फायरबेस पोस्ट्स (Real-time Firestore posts)
+  // सिंक विद ग्लोबल कॉन्टेक्स्ट पोस्ट्स (Shared real-time post state)
   useEffect(() => {
-    const unsubscribe = subscribeToFirestorePosts((firestorePosts: FirestorePost[]) => {
-      if (firestorePosts && firestorePosts.length > 0) {
-        const mapped: Post[] = firestorePosts.map(fp => ({
-          id: fp.id || fp.postId || String(Math.random()),
-          username: fp.author?.name || fp.authorName || 'भारत नागरिक',
-          location: fp.locationName || 'भारत',
-          audioUrl: fp.audioURL || undefined,
-          caption: fp.caption || fp.text || '',
-          likes: fp.likesCount || fp.likeCount || 0,
-          commentsCount: fp.commentsCount || (Array.isArray(fp.comments) ? fp.comments.length : 0),
-          timeAgo: fp.createdAt || 'कुछ समय पहले'
-        }));
+    if (globalPosts && globalPosts.length > 0) {
+      const mapped: Post[] = globalPosts.map(fp => ({
+        id: fp.id || fp.postId || String(Math.random()),
+        username: fp.author?.name || fp.authorName || 'भारत नागरिक',
+        location: fp.locationName || 'भारत',
+        audioUrl: fp.audioURL || undefined,
+        caption: fp.caption || fp.text || '',
+        likes: fp.likesCount || fp.likeCount || 0,
+        commentsCount: fp.commentsCount || (Array.isArray(fp.comments) ? fp.comments.length : 0),
+        timeAgo: fp.createdAt || 'कुछ समय पहले'
+      }));
 
-        setPosts(prev => {
-          const ids = new Set(mapped.map(m => m.id));
-          const uniques = prev.filter(p => !ids.has(p.id));
-          return [...mapped, ...uniques];
-        });
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
+      setPosts(prev => {
+        const ids = new Set(mapped.map(m => m.id));
+        const uniques = prev.filter(p => !ids.has(p.id));
+        return [...mapped, ...uniques];
+      });
+    }
+  }, [globalPosts]);
 
   // परफॉर्मेंस ऑप्टिमाइजेशन: जब यूजर फीड में स्क्रॉल करे, तो ऑडियो प्लेबैक अपने आप पॉज़ हो जाए ताकि डेटा और बैटरी बचे
   useEffect(() => {

@@ -8,7 +8,8 @@ import {
   AppNotification, 
   ReportTicket, 
   LanguageCode, 
-  MainTab 
+  MainTab,
+  PromoteCampaign 
 } from '../types/bharatConnect';
 import { 
   INITIAL_USERS, 
@@ -17,7 +18,8 @@ import {
   INITIAL_REELS, 
   INITIAL_NOTIFICATIONS, 
   INITIAL_REPORTS, 
-  CURRENT_USER 
+  CURRENT_USER,
+  INITIAL_CAMPAIGNS 
 } from '../data/bharatConnectData';
 import { TRANSLATIONS, Translations } from '../data/translations';
 import { 
@@ -124,6 +126,8 @@ interface BharatConnectContextType {
     audioOptions?: { audioURL: string; audioDuration?: number | string; audioTitle?: string },
     isAnonymous?: boolean
   ) => Promise<boolean>;
+  createStory: (imageUrl: string, title?: string) => Promise<boolean>;
+  createReel: (videoUrl: string, caption: string, audioTitle?: string, tags?: string[], posterUrl?: string) => Promise<boolean>;
   deletePost: (postId: string) => void;
   updatePostCaption: (postId: string, newCaption: string) => Promise<boolean>;
   toggleLikeReel: (reelId: string) => void;
@@ -134,6 +138,20 @@ interface BharatConnectContextType {
   resolveReport: (reportId: string, action: 'dismissed' | 'resolved') => void;
   loginAs: (user: User) => void;
   logout: () => void;
+
+  // Mobile Promote & Campaign System
+  campaigns: PromoteCampaign[];
+  activeCampaign: PromoteCampaign | null;
+  isPromoteModalOpen: boolean;
+  promotingPost: Post | null;
+  promoteInitialStep: number;
+  openPromoteModal: (post?: Post | null, initialStep?: number) => void;
+  closePromoteModal: () => void;
+  createCampaign: (campaign: PromoteCampaign) => void;
+  updateCampaign: (campaignId: string, updates: Partial<PromoteCampaign>) => void;
+  toggleSmartPause: (campaignId: string) => void;
+  togglePauseCampaign: (campaignId: string) => void;
+  addBudgetToCampaign: (campaignId: string, additionalAmount: number) => void;
 }
 
 const BharatConnectContext = createContext<BharatConnectContextType | null>(null);
@@ -187,6 +205,80 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isSOSModalOpen, setIsSOSModalOpen] = useState(false);
   const openSOSModal = () => setIsSOSModalOpen(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Promote & Campaigns State
+  const [campaigns, setCampaigns] = useState<PromoteCampaign[]>(INITIAL_CAMPAIGNS);
+  const [isPromoteModalOpen, setIsPromoteModalOpen] = useState(false);
+  const [promotingPost, setPromotingPost] = useState<Post | null>(null);
+  const [promoteInitialStep, setPromoteInitialStep] = useState<number>(1);
+
+  const activeCampaign = campaigns.find((c) => c.status === 'running') || campaigns[0] || null;
+
+  const openPromoteModal = (post?: Post | null, initialStep: number = 1) => {
+    setPromotingPost(post || null);
+    setPromoteInitialStep(initialStep);
+    setIsPromoteModalOpen(true);
+  };
+
+  const closePromoteModal = () => {
+    setIsPromoteModalOpen(false);
+    setPromotingPost(null);
+  };
+
+  const createCampaign = (newCamp: PromoteCampaign) => {
+    setCampaigns((prev) => [newCamp, ...prev]);
+    showToast('🚀 कैंपेन सफलतापूर्वक लाइव हो गया!');
+  };
+
+  const updateCampaign = (campaignId: string, updates: Partial<PromoteCampaign>) => {
+    setCampaigns((prev) => prev.map((c) => (c.id === campaignId ? { ...c, ...updates } : c)));
+  };
+
+  const toggleSmartPause = (campaignId: string) => {
+    setCampaigns((prev) =>
+      prev.map((c) => {
+        if (c.id === campaignId) {
+          const next = !c.smartPauseEnabled;
+          showToast(next ? '🛡️ स्मार्ट पॉज चालू (Auto-Protect On)' : 'स्मार्ट पॉज बंद किया गया');
+          return { ...c, smartPauseEnabled: next };
+        }
+        return c;
+      })
+    );
+  };
+
+  const togglePauseCampaign = (campaignId: string) => {
+    setCampaigns((prev) =>
+      prev.map((c) => {
+        if (c.id === campaignId) {
+          const isCurrentlyRunning = c.status === 'running';
+          const newStatus = isCurrentlyRunning ? 'paused' : 'running';
+          showToast(isCurrentlyRunning ? '⏸️ कैंपेन रोक दिया गया (Paused)' : '▶️ कैंपेन पुनः चालू हो गया (Resumed)');
+          return { ...c, status: newStatus };
+        }
+        return c;
+      })
+    );
+  };
+
+  const addBudgetToCampaign = (campaignId: string, additionalAmount: number) => {
+    setCampaigns((prev) =>
+      prev.map((c) => {
+        if (c.id === campaignId) {
+          const newTotal = c.totalBudget + additionalAmount;
+          const addedReach = Math.round(additionalAmount * 18);
+          showToast(`💰 ₹${additionalAmount} बजट बढ़ाया गया! अनुमानित रीच +${addedReach}`);
+          return {
+            ...c,
+            totalBudget: newTotal,
+            targetReach: c.targetReach + addedReach,
+            grandTotal: c.grandTotal + Math.round(additionalAmount * 1.18),
+          };
+        }
+        return c;
+      })
+    );
+  };
 
   // Firebase auth state
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
@@ -756,6 +848,47 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  const createStory = async (imageUrl: string, title?: string): Promise<boolean> => {
+    const newStory: Story = {
+      id: `story_${Date.now()}`,
+      author: currentUser,
+      imageUrl,
+      title: title || 'आपकी स्टोरी',
+      viewCount: 1,
+      createdAt: 'अभी-अभी',
+      hasSeen: false
+    };
+    setStories((prev) => [newStory, ...prev]);
+    showToast('⭕ आपकी 24h स्टोरी सफलतापूर्वक प्रकाशित हो गई!');
+    setActiveTab('home');
+    return true;
+  };
+
+  const createReel = async (
+    videoUrl: string, 
+    caption: string, 
+    audioTitle?: string, 
+    tags?: string[], 
+    posterUrl?: string
+  ): Promise<boolean> => {
+    const newReel: Reel = {
+      id: `reel_${Date.now()}`,
+      author: currentUser,
+      videoUrl,
+      posterUrl: posterUrl || 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&auto=format&fit=crop&q=80',
+      caption,
+      audioTitle: audioTitle || 'ओरिजिनल ऑडियो - ' + currentUser.fullName,
+      likesCount: 0,
+      commentsCount: 0,
+      isLiked: false,
+      tags: tags || ['BharatReels', 'DesiVibes']
+    };
+    setReels((prev) => [newReel, ...prev]);
+    showToast('🎥 आपकी नई रील सफलतापूर्वक प्रकाशित हो गई!');
+    setActiveTab('reels');
+    return true;
+  };
+
   const deletePost = async (postId: string) => {
     const postToDelete = posts.find((p) => p.id === postId);
     const authorUid = postToDelete?.authorUid || postToDelete?.author?.uid || postToDelete?.author?.id;
@@ -1010,6 +1143,8 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
         addComment,
         toggleFollowUser,
         createPost,
+        createStory,
+        createReel,
         deletePost,
         updatePostCaption,
         toggleLikeReel,
@@ -1019,7 +1154,19 @@ export const BharatConnectProvider: React.FC<{ children: React.ReactNode }> = ({
         updateProfile,
         resolveReport,
         loginAs,
-        logout
+        logout,
+        campaigns,
+        activeCampaign,
+        isPromoteModalOpen,
+        promotingPost,
+        promoteInitialStep,
+        openPromoteModal,
+        closePromoteModal,
+        createCampaign,
+        updateCampaign,
+        toggleSmartPause,
+        togglePauseCampaign,
+        addBudgetToCampaign
       }}
     >
       {children}

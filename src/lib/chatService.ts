@@ -89,7 +89,8 @@ export async function getOrCreateChat(
 export async function sendChatMessage(
   chatId: string,
   text: string,
-  currentUser: User
+  currentUser: User,
+  mediaOptions?: { mediaUrl?: string; audioUrl?: string; audioDuration?: string }
 ): Promise<ChatMessage> {
   const currentUid = currentUser.uid || currentUser.id || auth.currentUser?.uid;
   if (!currentUid) {
@@ -97,7 +98,8 @@ export async function sendChatMessage(
   }
 
   const trimmedText = text.trim();
-  if (!trimmedText) {
+  const hasMedia = Boolean(mediaOptions?.mediaUrl || mediaOptions?.audioUrl);
+  if (!trimmedText && !hasMedia) {
     throw new Error('संदेश खाली नहीं हो सकता।');
   }
 
@@ -106,14 +108,23 @@ export async function sendChatMessage(
   const senderAvatar = currentUser.photoURL || currentUser.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80';
   const senderName = currentUser.fullName || currentUser.name || 'उपयोगकर्ता';
 
+  const defaultSummaryText = mediaOptions?.audioUrl 
+    ? '🎤 वॉयस संदेश' 
+    : mediaOptions?.mediaUrl 
+    ? '📷 फोटो' 
+    : trimmedText;
+
   const messagePayload: ChatMessage = {
     id: messageId,
     chatId,
     senderUid: currentUid,
     senderName,
     senderAvatar,
-    text: trimmedText,
-    createdAt: nowIso
+    text: trimmedText || defaultSummaryText,
+    createdAt: nowIso,
+    mediaUrl: mediaOptions?.mediaUrl,
+    audioUrl: mediaOptions?.audioUrl,
+    audioDuration: mediaOptions?.audioDuration
   };
 
   const messagePath = `chats/${chatId}/messages/${messageId}`;
@@ -124,7 +135,7 @@ export async function sendChatMessage(
     // 2. Update chat metadata (last message, timestamp, last sender)
     try {
       await updateDoc(doc(db, 'chats', chatId), {
-        lastMessage: trimmedText,
+        lastMessage: trimmedText || defaultSummaryText,
         lastMessageTimestamp: nowIso,
         lastSenderUid: currentUid,
         updatedAt: nowIso

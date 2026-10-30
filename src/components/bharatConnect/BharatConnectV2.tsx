@@ -45,8 +45,7 @@ import {
 } from 'lucide-react';
 import { useBharatConnect } from '../../context/BharatConnectContext';
 import { useAuth } from '../../context/AuthContext';
-import { Post as FirestorePost } from '../../types/bharatConnect';
-import { createFirestorePost, subscribeToFirestorePosts } from '../../lib/postService';
+import { createFirestorePost } from '../../lib/postService';
 
 // Interfaces
 interface StoryItem {
@@ -201,7 +200,7 @@ const TRENDING_TAGS = [
 ];
 
 export default function BharatConnectV2() {
-  const { currentUser, openSOSModal, setToastMessage, setActiveTab: setGlobalActiveTab } = useBharatConnect();
+  const { currentUser, openSOSModal, setToastMessage, setActiveTab: setGlobalActiveTab, posts: globalPosts } = useBharatConnect();
   const { user: firebaseAuthUser } = useAuth();
 
   // Theme & App State
@@ -252,47 +251,43 @@ export default function BharatConnectV2() {
     { id: 3, user: 'BharatConnect Team', text: 'आपके हुनर प्रोफाइल को वेरीफाई किया गया 🎉', time: '1 दिन पहले', unread: true },
   ]);
 
-  // Sync real posts from Firestore
+  // Sync real posts from Global Context (Shared real-time post state)
   useEffect(() => {
-    const unsubscribe = subscribeToFirestorePosts((firestorePosts: FirestorePost[]) => {
-      if (firestorePosts && firestorePosts.length > 0) {
-        const mapped: PostItem[] = firestorePosts.map((fp) => ({
-          id: fp.id || fp.postId || String(Math.random()),
-          author: {
-            name: fp.author?.name || fp.authorName || 'भारत नागरिक',
-            handle: fp.author?.handle || `@${fp.authorName?.toLowerCase().replace(/\s+/g, '') || 'citizen'}`,
-            location: fp.locationName || 'भारत',
-            timeAgo: fp.createdAt || 'अभी-अभी',
-            avatar: fp.author?.avatar || fp.authorPhotoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
-            verified: true,
-            badgeType: fp.audioURL ? 'Awaaz Creator' : 'Founding Citizen'
-          },
-          type: fp.audioURL ? 'audio' : (fp.imageUrl || fp.imageURL ? 'image' : 'text'),
-          caption: fp.caption || fp.text || '',
-          audioTitle: fp.audioTitle || (fp.audioURL ? 'आवाज़ (Awaaz Audio)' : undefined),
-          audioSubtitle: fp.audioDuration ? `आवाज़ • ${fp.audioDuration}` : 'आवाज़ (Awaaz Audio)',
-          audioQuote: fp.audioURL ? (fp.caption || fp.text) : undefined,
-          imageUrl: fp.imageUrl || fp.imageURL || undefined,
-          watermark: `BharatConnect @${fp.author?.username || 'user'}`,
-          likes: fp.likesCount || fp.likeCount || 0,
-          comments: fp.commentsCount || (Array.isArray(fp.comments) ? fp.comments.length : 0),
-          reposts: fp.sharesCount || 0,
-          isLiked: Boolean(fp.isLiked),
-          isBookmarked: Boolean(fp.isSaved),
-          hashtags: fp.tags?.length ? fp.tags.map(t => t.startsWith('#') ? t : `#${t}`) : ['#BharatConnect'],
-          category: (fp as any).category || 'कला एवं संगीत'
-        }));
+    if (globalPosts && globalPosts.length > 0) {
+      const mapped: PostItem[] = globalPosts.map((fp) => ({
+        id: fp.id || fp.postId || String(Math.random()),
+        author: {
+          name: fp.author?.name || fp.authorName || 'भारत नागरिक',
+          handle: fp.author?.handle || `@${fp.authorName?.toLowerCase().replace(/\s+/g, '') || 'citizen'}`,
+          location: fp.locationName || 'भारत',
+          timeAgo: fp.createdAt || 'अभी-अभी',
+          avatar: fp.author?.avatar || fp.authorPhotoURL || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+          verified: true,
+          badgeType: fp.audioURL ? 'Awaaz Creator' : 'Founding Citizen'
+        },
+        type: fp.audioURL ? 'audio' : (fp.imageUrl || fp.imageURL ? 'image' : 'text'),
+        caption: fp.caption || fp.text || '',
+        audioTitle: fp.audioTitle || (fp.audioURL ? 'आवाज़ (Awaaz Audio)' : undefined),
+        audioSubtitle: fp.audioDuration ? `आवाज़ • ${fp.audioDuration}` : 'आवाज़ (Awaaz Audio)',
+        audioQuote: fp.audioURL ? (fp.caption || fp.text) : undefined,
+        imageUrl: fp.imageUrl || fp.imageURL || undefined,
+        watermark: `BharatConnect @${fp.author?.username || 'user'}`,
+        likes: fp.likesCount || fp.likeCount || 0,
+        comments: fp.commentsCount || (Array.isArray(fp.comments) ? fp.comments.length : 0),
+        reposts: fp.sharesCount || 0,
+        isLiked: Boolean(fp.isLiked),
+        isBookmarked: Boolean(fp.isSaved),
+        hashtags: fp.tags?.length ? fp.tags.map(t => t.startsWith('#') ? t : `#${t}`) : ['#BharatConnect'],
+        category: (fp as any).category || 'कला एवं संगीत'
+      }));
 
-        setPosts(prev => {
-          const ids = new Set(mapped.map(m => m.id));
-          const uniques = prev.filter(p => !ids.has(p.id));
-          return [...mapped, ...uniques];
-        });
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
+      setPosts(prev => {
+        const ids = new Set(mapped.map(m => m.id));
+        const uniques = prev.filter(p => !ids.has(p.id));
+        return [...mapped, ...uniques];
+      });
+    }
+  }, [globalPosts]);
 
   // Handle Likes
   const toggleLike = (postId: string) => {

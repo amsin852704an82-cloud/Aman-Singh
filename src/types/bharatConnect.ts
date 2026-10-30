@@ -82,7 +82,9 @@ export interface Post {
   likedBy?: string[];
   audioURL?: string;
   audioDuration?: number | string;
-  mediaType?: 'image' | 'audio' | 'text';
+  mediaType?: 'image' | 'audio' | 'text' | 'video';
+  videoUrl?: string;
+  posterUrl?: string;
   audioTitle?: string;
   isAnonymous?: boolean;
 }
@@ -150,6 +152,9 @@ export interface ChatMessage {
   senderAvatar: string;
   text: string;
   createdAt: string;
+  mediaUrl?: string;
+  audioUrl?: string;
+  audioDuration?: string;
 }
 
 export interface ChatParticipant {
@@ -247,4 +252,41 @@ export interface CreatorStats {
   engagementRate: number;
   estimatedEarningsINR: number;
   bestTimeToPost: string;
+}
+
+export interface PromoteCampaign {
+  id: string;
+  postId?: string;
+  postTitle: string;
+  postText?: string;
+  postImageUrl?: string;
+  postAuthorName: string;
+  postAuthorAvatar: string;
+  postAuthorHandle: string;
+  objective: 'post' | 'profile' | 'series';
+  goal: 'engagement' | 'profile_visits';
+  audienceType: 'auto' | 'custom';
+  language: string;
+  selectedTags: string[];
+  dailyBudget: number; // in ₹
+  durationDays: number; // 3, 5, 7
+  totalBudget: number;
+  gstAmount: number;
+  grandTotal: number;
+  abTestEnabled: boolean;
+  abTestHeadline?: string;
+  abTestImageUrl?: string;
+  ctaText: string;
+  status: 'running' | 'paused' | 'completed';
+  daysLeft: number;
+  createdAt: string;
+
+  // Real-time Key Metrics
+  totalReach: number; // e.g. 840
+  targetReach: number; // e.g. 900
+  savesCount: number; // e.g. 42
+  likesCount: number; // e.g. 110
+  newFollowersCount: number; // e.g. 18
+  costPerResult: number; // e.g. 1.20
+  smartPauseEnabled: boolean; // Auto-Protect Budget toggle
 }

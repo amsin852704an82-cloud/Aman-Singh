@@ -11,21 +11,29 @@ import {
   Heart, 
   Trash2, 
   X, 
-  User as UserIcon,
-  Sparkles,
-  Camera,
-  Flame,
-  ShieldCheck,
-  Mic,
-  Music,
+  Camera, 
+  Sparkles, 
+  Flame, 
+  Check, 
+  TrendingUp, 
+  Eye, 
+  Video, 
+  DollarSign, 
+  Send,
   Loader2,
-  Check
+  AlertCircle
 } from 'lucide-react';
 import { Post } from '../../types/bharatConnect';
 import { subscribeToUserFollowers } from '../../lib/followService';
 import { checkUsernameAvailability, validateUsernameFormat } from '../../lib/usernameService';
 
+export interface ProfileViewProps {
+  userEmail?: string;
+  onLogout?: () => void;
+}
+
 const AVATAR_PRESETS = [
+  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
   'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=200&auto=format&fit=crop&q=80',
   'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&auto=format&fit=crop&q=80',
   'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80',
@@ -33,49 +41,70 @@ const AVATAR_PRESETS = [
   'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=200&auto=format&fit=crop&q=80'
 ];
 
-export const ProfileView: React.FC = () => {
+export default function ProfileView({ userEmail, onLogout }: ProfileViewProps = {}) {
   const { 
     currentUser, 
     posts, 
+    reels,
     updateProfile, 
     deletePost, 
     logout: contextLogout, 
     setIsAuthModalOpen,
     firebaseUser,
     t,
-    setActiveTab 
+    setActiveTab,
+    openPromoteModal,
+    campaigns,
+    activeCampaign,
+    setToastMessage
   } = useBharatConnect();
+  
   const { logout: authLogout, user: authUser, exitDemoMode } = useAuth();
 
-  const [activeTabSub, setActiveTabSub] = useState<'posts' | 'saved'>('posts');
+  // Tab State matching blueprint: 'posts' | 'reels' | 'saved'
+  const [activeTab, setActiveTabSub] = useState<'posts' | 'reels' | 'saved'>('posts');
   const [isEditing, setIsEditing] = useState(false);
-  const [liveFollowersCount, setLiveFollowersCount] = useState<number>(currentUser.followersCount || 0);
+  const [liveFollowersCount, setLiveFollowersCount] = useState<number>(currentUser.followersCount || 1420);
 
-  // Edit form state
-  const [name, setName] = useState(currentUser.fullName);
-  const [editUsername, setEditUsername] = useState(currentUser.username);
-  const [bio, setBio] = useState(currentUser.bio);
-  const [location, setLocation] = useState(currentUser.location);
-  const [avatar, setAvatar] = useState(currentUser.avatar);
+  // UPI Super Thanks Earnings & Withdrawal Modal State
+  const [creatorEarnings, setCreatorEarnings] = useState<number>(450.00);
+  const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
+  const [upiWithdrawId, setUpiWithdrawId] = useState('creator@bharatupi');
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [withdrawSuccess, setWithdrawSuccess] = useState(false);
+
+  // Edit Profile Form State
+  const effectiveEmail = userEmail || firebaseUser?.email || authUser?.email || 'creator@bharatconnect.in';
+  const defaultUsername = userEmail ? userEmail.split('@')[0] : (currentUser.name || currentUser.username || 'भारतीय क्रिएटर');
+  const [name, setName] = useState(currentUser.fullName || defaultUsername);
+  const [editUsername, setEditUsername] = useState(currentUser.username || defaultUsername.toLowerCase().replace(/\s+/g, '_'));
+  const [bio, setBio] = useState(currentUser.bio || '✨ काव्य, तकनीक और भारतीय संस्कृति का सफर। मिलकर कुछ नया सीखते हैं! 🇮🇳');
+  const [location, setLocation] = useState(currentUser.location || 'India');
+  const [avatar, setAvatar] = useState(currentUser.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200');
   const [isSaving, setIsSaving] = useState(false);
   const [usernameCheck, setUsernameCheck] = useState<{ checking: boolean; available?: boolean; message?: string }>({ checking: false });
 
-  const myPosts = posts.filter((p) => p.author.id === currentUser.id);
+  const myPosts = posts.filter((p) => p.author?.id === currentUser.id || p.authorId === currentUser.id);
   const savedPosts = posts.filter((p) => p.isSaved);
+  const myReels = reels || [];
+
+  // Username display for header
+  const displayUsername = userEmail ? userEmail.split('@')[0] : (currentUser.fullName || currentUser.username || 'भारतीय क्रिएटर');
+  const displayHandle = `@${displayUsername.toLowerCase().replace(/[^a-z0-9_]/g, '_')}`;
 
   // Sync edit form with currentUser when opened
   useEffect(() => {
     if (isEditing) {
-      setName(currentUser.fullName);
-      setEditUsername(currentUser.username);
-      setBio(currentUser.bio);
-      setLocation(currentUser.location);
-      setAvatar(currentUser.avatar);
+      setName(currentUser.fullName || displayUsername);
+      setEditUsername(currentUser.username || displayUsername.toLowerCase().replace(/\s+/g, '_'));
+      setBio(currentUser.bio || '✨ काव्य, तकनीक और भारतीय संस्कृति का सफर। मिलकर कुछ नया सीखते हैं! 🇮🇳');
+      setLocation(currentUser.location || 'India');
+      setAvatar(currentUser.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200');
       setUsernameCheck({ checking: false });
     }
-  }, [isEditing, currentUser]);
+  }, [isEditing, currentUser, displayUsername]);
 
-  // Check username availability when user changes username in edit profile
+  // Check username availability when user changes username
   useEffect(() => {
     if (!isEditing || !editUsername.trim() || editUsername.toLowerCase().trim() === currentUser.username.toLowerCase()) {
       setUsernameCheck({ checking: false });
@@ -111,11 +140,16 @@ export const ProfileView: React.FC = () => {
     return () => unsub();
   }, [currentUser.uid, currentUser.id]);
 
-  useEffect(() => {
-    if (typeof currentUser.followersCount === 'number') {
-      setLiveFollowersCount(currentUser.followersCount);
+  const handleLogoutAction = async () => {
+    if (onLogout) {
+      onLogout();
+      return;
     }
-  }, [currentUser.followersCount]);
+    await authLogout();
+    exitDemoMode();
+    contextLogout();
+    setToastMessage?.('लॉगआउट सफल रहा');
+  };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,419 +159,430 @@ export const ProfileView: React.FC = () => {
     setIsSaving(false);
     if (success !== false) {
       setIsEditing(false);
+      setToastMessage?.('प्रोफाइल सफलतापूर्वक अपडेट हो गई!');
     }
   };
 
+  // Withdraw UPI earnings handler
+  const handleExecuteWithdrawal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!upiWithdrawId.trim() || creatorEarnings <= 0) return;
+
+    setIsWithdrawing(true);
+    setTimeout(() => {
+      setIsWithdrawing(false);
+      setWithdrawSuccess(true);
+      setTimeout(() => {
+        setToastMessage?.(`₹${creatorEarnings.toFixed(2)} आपके UPI ID (${upiWithdrawId}) में ट्रांसफर कर दिए गए हैं! 🚀`);
+        setCreatorEarnings(0);
+        setIsWithdrawModalOpen(false);
+        setWithdrawSuccess(false);
+      }, 1500);
+    }, 1200);
+  };
+
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 pb-24 space-y-6">
-      {/* Profile Header */}
-      <div className="bg-slate-900/60 rounded-3xl p-5 border border-slate-800 space-y-5">
-        <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
-          {/* Avatar with Indian Flag Gradient ring */}
-          <div className="relative group">
-            <div className="w-24 h-24 rounded-full p-1 bg-gradient-to-tr from-orange-500 via-amber-400 to-emerald-500 shadow-lg">
-              <img
-                src={currentUser.photoURL || currentUser.avatar}
-                alt={currentUser.name || currentUser.fullName}
-                className="w-full h-full rounded-full object-cover border-2 border-slate-950"
-              />
-            </div>
+    <div className="w-full min-h-screen bg-[#0F172A] text-slate-100 font-sans pb-24">
+      
+      {/* 1. कवर बैनर (Cover Banner with Orange Overlay) */}
+      <div className="w-full h-[130px] bg-[#1E293B] relative overflow-hidden">
+        {/* Background gradient & decorative pattern */}
+        <div className="absolute inset-0 bg-gradient-to-r from-orange-950/40 via-slate-900 to-amber-950/40" />
+        <div 
+          style={{ backgroundColor: 'rgba(255, 107, 0, 0.15)' }} 
+          className="absolute inset-0"
+        />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-orange-500/20 via-transparent to-transparent" />
+      </div>
+
+      {/* 2. प्रोफाइल हेडर सेक्शन (Profile Header Section) */}
+      <div className="bg-[#1E293B] px-4 pb-4 border-b border-[#334155] rounded-b-3xl relative shadow-lg">
+        
+        {/* अवतार कंटेनर (Avatar with Overlap -45px & Border #FF6B00) */}
+        <div className="flex justify-between items-start">
+          <div className="-mt-[45px] mb-2.5 relative">
+            <img
+              src={currentUser.photoURL || currentUser.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200'}
+              alt={displayUsername}
+              style={{
+                width: 90,
+                height: 90,
+                borderRadius: 45,
+                borderWidth: 3,
+                borderColor: '#FF6B00'
+              }}
+              className="object-cover shadow-2xl bg-slate-900"
+            />
             <button
               onClick={() => setIsEditing(true)}
-              className="absolute bottom-0 right-0 p-1.5 rounded-full bg-slate-900 border border-slate-700 text-orange-400 shadow-md hover:scale-105 transition"
-              title="Edit Profile"
+              className="absolute bottom-0 right-0 p-1.5 rounded-full bg-[#1E293B] border border-[#FF6B00] text-[#FF6B00] hover:scale-110 active:scale-95 transition shadow-md"
+              title="प्रोफाइल फोटो बदलें"
             >
-              <Camera className="w-3.5 h-3.5" />
+              <Camera size={14} />
             </button>
           </div>
 
-          {/* User Details */}
-          <div className="flex-1 text-center sm:text-left space-y-2">
-            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
-              <h2 className="text-xl font-bold text-white tracking-tight">
-                {currentUser.name || currentUser.fullName}
-              </h2>
-              {currentUser.verified && (
-                <CheckCircle2 className="w-4 h-4 text-blue-400 fill-blue-400/20" />
-              )}
-              <span className="text-xs text-slate-400">{currentUser.handle}</span>
-            </div>
-
-            <p className="text-xs text-slate-300 leading-relaxed max-w-md">
-              {currentUser.bio}
-            </p>
-
-            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 text-xs text-slate-400">
-              <div className="flex items-center gap-1">
-                <MapPin className="w-3.5 h-3.5 text-orange-400" />
-                <span>{currentUser.location}</span>
-              </div>
-              <span>·</span>
-              {firebaseUser ? (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[11px] font-semibold flex items-center gap-1">
-                    <Flame className="w-3 h-3 text-amber-400 fill-amber-400" />
-                    <span>UID: {firebaseUser.uid.slice(0, 8)}...</span>
-                  </span>
-                  <span className="text-slate-400 text-[11px]">{firebaseUser.email}</span>
-                </div>
-              ) : (
-                <span className="text-emerald-400 font-medium">सत्यापित भारतीय नागरिक (Verified)</span>
-              )}
-            </div>
-
-            {/* Quick action buttons */}
-            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-2">
-              <button
-                onClick={() => {
-                  setName(currentUser.fullName);
-                  setBio(currentUser.bio);
-                  setLocation(currentUser.location);
-                  setAvatar(currentUser.avatar);
-                  setIsEditing(true);
-                }}
-                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold flex items-center gap-1.5 border border-slate-700 transition active:scale-95"
-              >
-                <Edit3 className="w-3.5 h-3.5 text-orange-400" />
-                <span>{t.editProfile}</span>
-              </button>
-
-              <button
-                onClick={() => setIsAuthModalOpen(true)}
-                className="px-3.5 py-2 rounded-xl bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/30 text-xs font-semibold transition active:scale-95"
-              >
-                {firebaseUser ? 'खाता बदलें (Switch)' : 'Firebase लॉगिन / खाता (Login)'}
-              </button>
-
-              <button
-                onClick={async () => {
-                  await authLogout();
-                  exitDemoMode();
-                  contextLogout();
-                }}
-                className="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 text-xs font-semibold flex items-center gap-1.5 transition active:scale-95"
-                title={t.logout}
-              >
-                <LogOut className="w-3.5 h-3.5 text-rose-400" />
-                <span>लॉग आउट (Log Out)</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Counts Row */}
-        <div className="grid grid-cols-3 divide-x divide-slate-800 border-t border-slate-800/80 pt-4 text-center">
-          <div>
-            <div className="text-lg font-black text-white">{myPosts.length}</div>
-            <div className="text-[11px] text-slate-400">{t.posts}</div>
-          </div>
-          <div>
-            <div className="text-lg font-black text-white">{liveFollowersCount}</div>
-            <div className="text-[11px] text-slate-400">{t.followers}</div>
-          </div>
-          <div>
-            <div className="text-lg font-black text-white">{currentUser.followingCount}</div>
-            <div className="text-[11px] text-slate-400">{t.following}</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Tabs: My Posts vs Saved */}
-      <div className="flex border-b border-slate-800">
-        <button
-          onClick={() => setActiveTabSub('posts')}
-          className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-2 border-b-2 transition ${
-            activeTabSub === 'posts'
-              ? 'border-orange-500 text-orange-400'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Grid className="w-4 h-4" />
-          <span>मेरी पोस्ट्स ({myPosts.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTabSub('saved')}
-          className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-2 border-b-2 transition ${
-            activeTabSub === 'saved'
-              ? 'border-orange-500 text-orange-400'
-              : 'border-transparent text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Bookmark className="w-4 h-4" />
-          <span>सहेजी गई पोस्ट्स ({savedPosts.length})</span>
-        </button>
-      </div>
-
-      {/* Posts Grid */}
-      {activeTabSub === 'posts' ? (
-        myPosts.length === 0 ? (
-          <div className="p-12 text-center bg-slate-900/40 rounded-3xl border border-slate-800 space-y-3">
-            <Camera className="w-10 h-10 text-slate-600 mx-auto" />
-            <p className="text-sm font-semibold text-slate-300">अभी तक कोई पोस्ट नहीं की है</p>
-            <p className="text-xs text-slate-500">अपनी पहली तस्वीर या विचार BharatConnect पर साझा करें!</p>
+          {/* हेडर एक्शन्स: एडिट प्रोफाइल & लॉगआउट बटन */}
+          <div className="flex items-center gap-2 pt-3">
             <button
-              onClick={() => setActiveTab('create')}
-              className="px-4 py-2 rounded-xl bg-orange-500 text-white text-xs font-semibold shadow-md active:scale-95 transition"
+              onClick={() => setIsEditing(true)}
+              className="bg-[#334155] hover:bg-slate-700 active:scale-95 transition px-3 py-1.5 rounded-2xl border border-[#FF6B00] text-[#FF6B00] text-xs font-bold flex items-center gap-1 cursor-pointer"
             >
-              + पहली पोस्ट बनाएं
+              <Edit3 size={12} />
+              <span>✏️ एडिट प्रोफाइल</span>
+            </button>
+
+            <button
+              onClick={handleLogoutAction}
+              className="bg-[#EF4444] hover:bg-rose-600 active:scale-95 transition px-3 py-1.5 rounded-2xl text-white text-xs font-bold flex items-center gap-1 cursor-pointer shadow-sm"
+              title="लॉगआउट करें"
+            >
+              <LogOut size={12} />
+              <span>लॉगआउट</span>
             </button>
           </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {myPosts.map((post) => (
-              <div
-                key={post.id}
-                className="group relative aspect-square rounded-2xl overflow-hidden bg-slate-900 border border-slate-800 shadow-sm"
-              >
-                {post.imageUrl ? (
-                  <img
-                    src={post.imageUrl}
-                    alt={post.caption || 'Post image'}
-                    className="w-full h-full object-cover transition duration-300 group-hover:scale-105"
-                  />
-                ) : post.mediaType === 'audio' || Boolean(post.audioURL) ? (
-                  <div className="w-full h-full p-3.5 bg-gradient-to-br from-purple-950/70 via-slate-900 to-orange-950/70 flex flex-col justify-between select-none">
-                    <div className="flex items-center justify-between">
-                      <span className="p-1 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                        <Mic className="w-3.5 h-3.5" />
-                      </span>
-                      <span className="text-[10px] text-orange-400 font-mono">🎙️ आवाज़</span>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-xs font-bold text-white line-clamp-2">
-                        {post.audioTitle || post.caption || 'ऑडियो शायरी'}
-                      </p>
-                      <div className="flex items-center gap-0.5 h-3">
-                        {[40, 75, 55, 90, 60, 80, 45, 95].map((h, i) => (
-                          <div 
-                            key={i} 
-                            style={{ height: `${h}%` }} 
-                            className="w-1 bg-purple-400/80 rounded-full" 
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="w-full h-full p-3 bg-gradient-to-br from-orange-950/30 to-slate-900 flex items-center justify-center text-center p-3">
-                    <p className="text-xs text-slate-200 line-clamp-4 italic">
-                      "{post.text || post.caption}"
-                    </p>
-                  </div>
-                )}
-                
-                {/* Overlay with stats & delete */}
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-3 text-white">
-                  <div className="flex justify-end">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (confirm('क्या आप वाकई इस पोस्ट को हटाना चाहते हैं?')) {
-                          deletePost(post.id);
-                        }
-                      }}
-                      className="p-1.5 rounded-lg bg-red-500/80 hover:bg-red-600 text-white transition active:scale-90"
-                      title="Delete post"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs font-bold">
-                    <span className="flex items-center gap-1">
-                      <Heart className="w-3.5 h-3.5 fill-rose-500 text-rose-500" />
-                      {post.likesCount}
-                    </span>
-                    <span>{post.commentsCount} टिप्पणियां</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )
-      ) : (
-        savedPosts.length === 0 ? (
-          <div className="p-12 text-center bg-slate-900/40 rounded-3xl border border-slate-800">
-            <Bookmark className="w-10 h-10 text-slate-600 mx-auto mb-2" />
-            <p className="text-sm font-semibold text-slate-300">कोई सहेजी गई पोस्ट नहीं है</p>
-            <p className="text-xs text-slate-500 mt-1">होम फ़ीड में बुकमार्क आइकन दबाकर पोस्ट सहेजें।</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {savedPosts.map((post) => (
-              <div
-                key={post.id}
-                className="relative aspect-square rounded-2xl overflow-hidden bg-slate-900 border border-slate-800"
-              >
-                {post.imageUrl ? (
-                  <img
-                    src={post.imageUrl}
-                    alt={post.caption || 'Saved post'}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full p-3 bg-gradient-to-br from-purple-950/50 to-slate-900 flex flex-col justify-between">
-                    <span className="text-[10px] text-purple-300 font-bold flex items-center gap-1">
-                      <Mic className="w-3 h-3" /> आवाज़
-                    </span>
-                    <p className="text-xs text-slate-200 line-clamp-3">
-                      {post.caption || post.text}
-                    </p>
-                  </div>
-                )}
-                <div className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-sm px-2 py-0.5 rounded-lg text-[10px] text-white">
-                  @{post.author.username}
-                </div>
-              </div>
-            ))}
-          </div>
-        )
-      )}
+        </div>
 
-      {/* Edit Profile Modal */}
+        {/* नाम और बायो */}
+        <div className="mt-1">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <h1 className="text-xl font-bold text-[#F8FAFC]">
+              {displayUsername} 🇮🇳
+            </h1>
+            {currentUser.verified && (
+              <CheckCircle2 size={16} className="text-blue-400 fill-blue-400/20" />
+            )}
+          </div>
+          <p className="text-[#94A3B8] text-xs font-medium mb-2">
+            {displayHandle}
+          </p>
+          <p className="text-[#CBD5E1] text-sm leading-relaxed mb-4">
+            {currentUser.bio || bio}
+          </p>
+        </div>
+
+        {/* 3. स्टैट्स रो (पोस्ट्स, फॉलोअर्स, फॉलोइंग) */}
+        <div className="bg-[#0F172A] rounded-xl py-3 px-2 flex justify-around items-center border border-[#334155] mb-4 shadow-inner">
+          <div className="text-center flex-1">
+            <span className="text-white text-base font-bold block">
+              {myPosts.length > 0 ? myPosts.length : 24}
+            </span>
+            <span className="text-[#94A3B8] text-xs mt-0.5 block">पोस्ट्स</span>
+          </div>
+
+          <div className="w-[1px] h-6 bg-[#334155]" />
+
+          <div className="text-center flex-1">
+            <span className="text-white text-base font-bold block">
+              {liveFollowersCount > 999 ? `${(liveFollowersCount / 1000).toFixed(1)}K` : liveFollowersCount}
+            </span>
+            <span className="text-[#94A3B8] text-xs mt-0.5 block">फॉलोअर्स</span>
+          </div>
+
+          <div className="w-[1px] h-6 bg-[#334155]" />
+
+          <div className="text-center flex-1">
+            <span className="text-white text-base font-bold block">
+              {currentUser.followingCount || 320}
+            </span>
+            <span className="text-[#94A3B8] text-xs mt-0.5 block">फॉलोइंग</span>
+          </div>
+        </div>
+
+        {/* 4. UPI क्रिएटर अर्निंग्स कार्ड (₹1 प्रति लाइक मॉडल) */}
+        <div 
+          style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)' }}
+          className="rounded-2xl p-4 flex justify-between items-center border border-emerald-500/50 mb-4 shadow-md bg-emerald-950/20"
+        >
+          <div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-emerald-400 text-xs font-bold">
+                💰 कुल क्रिएटर कमाई (₹1 प्रति लाइक)
+              </span>
+              <span className="bg-emerald-500/20 text-emerald-300 font-extrabold px-1.5 py-0.5 rounded text-[9px] border border-emerald-500/30">
+                लाइव रिवॉर्ड
+              </span>
+            </div>
+            <span className="text-emerald-400 text-xl font-black block mt-1 font-mono tracking-tight">
+              ₹{creatorEarnings.toFixed(2)}
+            </span>
+            <span className="text-slate-400 text-[10px] block mt-0.5">
+              प्रति लाइक ₹1 कैश | UPI से तत्काल निकासी
+            </span>
+          </div>
+
+          <button
+            onClick={() => {
+              if (creatorEarnings <= 0) {
+                setToastMessage?.('निकासी के लिए न्यूनतम बैलेंस ₹10 होना चाहिए');
+                return;
+              }
+              setIsWithdrawModalOpen(true);
+            }}
+            className="bg-emerald-600 hover:bg-emerald-500 active:scale-95 transition text-white px-3.5 py-2.5 rounded-xl text-xs font-bold cursor-pointer flex items-center gap-1.5 shadow-lg shadow-emerald-600/30"
+          >
+            <span>पैसे निकालें 💸</span>
+          </button>
+        </div>
+
+        {/* 5. टैब्स (पोस्ट्स / रील्स / सेव्ड) */}
+        <div className="flex justify-around border-t border-[#334155] pt-3">
+          <button
+            onClick={() => setActiveTabSub('posts')}
+            className={`py-1.5 px-3 rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'posts' 
+                ? 'bg-[#334155] text-[#FF6B00] font-bold' 
+                : 'text-[#94A3B8] hover:text-white'
+            }`}
+          >
+            <span>🖼️</span>
+            <span>पोस्ट्स</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTabSub('reels')}
+            className={`py-1.5 px-3 rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'reels' 
+                ? 'bg-[#334155] text-[#FF6B00] font-bold' 
+                : 'text-[#94A3B8] hover:text-white'
+            }`}
+          >
+            <span>🎥</span>
+            <span>रील्स</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTabSub('saved')}
+            className={`py-1.5 px-3 rounded-lg text-xs transition cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'saved' 
+                ? 'bg-[#334155] text-[#FF6B00] font-bold' 
+                : 'text-[#94A3B8] hover:text-white'
+            }`}
+          >
+            <span>🔖</span>
+            <span>सेव किए गए</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 6. ग्रिड कंटेंट (3-Column Media Grid) */}
+      <div className="p-1 max-w-2xl mx-auto">
+        {activeTab === 'posts' && (
+          <div className="grid grid-cols-3 gap-1">
+            {myPosts.length > 0 ? (
+              myPosts.map((post, index) => (
+                <div 
+                  key={post.id || index}
+                  className="aspect-square bg-[#1E293B] rounded-md overflow-hidden relative group cursor-pointer"
+                >
+                  {post.imageUrl || post.imageURL || post.mediaUrl ? (
+                    <img 
+                      src={post.imageUrl || post.imageURL || post.mediaUrl} 
+                      alt="पोस्ट इमेज" 
+                      className="w-full h-full object-cover transition group-hover:scale-105" 
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-slate-900 to-orange-950/40 p-2 flex flex-col justify-between text-[11px] text-slate-300">
+                      <span className="text-[10px] text-orange-400 font-bold">📝 विचार</span>
+                      <p className="line-clamp-3 italic">"{post.text || post.caption || ''}"</p>
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center gap-2 text-white text-xs font-bold">
+                    <span className="flex items-center gap-1">
+                      <Heart size={14} className="fill-rose-500 text-rose-500" />
+                      {post.likesCount || 0}
+                    </span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              // 6 Blueprint Initial Media items
+              [1, 2, 3, 4, 5, 6].map((item) => (
+                <div key={item} className="aspect-square bg-[#1E293B] rounded-md overflow-hidden relative group cursor-pointer">
+                  <img
+                    src={`https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=300&sig=${item}`}
+                    alt="ग्रिड मीडिया"
+                    className="w-full h-full object-cover transition group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-white text-xs font-bold gap-1">
+                    <Heart size={14} className="fill-rose-500 text-rose-500" />
+                    <span>{item * 42}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {activeTab === 'reels' && (
+          <div className="grid grid-cols-3 gap-1">
+            {myReels.length > 0 ? (
+              myReels.map((reel) => (
+                <div key={reel.id} className="aspect-[9/16] bg-[#1E293B] rounded-md overflow-hidden relative group cursor-pointer">
+                  <img 
+                    src={reel.posterUrl || 'https://images.unsplash.com/photo-1510519138171-eb1362e5b888?w=400'} 
+                    alt={reel.caption} 
+                    className="w-full h-full object-cover" 
+                  />
+                  <div className="absolute top-1.5 right-1.5 p-1 rounded-full bg-black/60 text-white">
+                    <Video size={12} />
+                  </div>
+                  <div className="absolute bottom-1.5 left-1.5 text-[10px] text-white font-bold flex items-center gap-1 drop-shadow-md">
+                    <Heart size={11} className="fill-white" />
+                    <span>{reel.likesCount}</span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              [1, 2, 3].map((r) => (
+                <div key={r} className="aspect-[9/16] bg-[#1E293B] rounded-md overflow-hidden relative group cursor-pointer">
+                  <img 
+                    src={`https://images.unsplash.com/photo-1510519138171-eb1362e5b888?w=400&sig=${r}`} 
+                    alt="रील" 
+                    className="w-full h-full object-cover" 
+                  />
+                  <div className="absolute top-1.5 right-1.5 p-1 rounded-full bg-black/60 text-white">
+                    <Video size={12} />
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {activeTab === 'saved' && (
+          <div className="grid grid-cols-3 gap-1">
+            {savedPosts.length > 0 ? (
+              savedPosts.map((post) => (
+                <div key={post.id} className="aspect-square bg-[#1E293B] rounded-md overflow-hidden relative group cursor-pointer">
+                  {post.imageUrl || post.mediaUrl ? (
+                    <img src={post.imageUrl || post.mediaUrl} alt="सेव पोस्ट" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full p-2 bg-slate-900 flex items-center justify-center text-center text-xs text-slate-300">
+                      <p className="line-clamp-3">{post.caption || post.text}</p>
+                    </div>
+                  )}
+                  <div className="absolute bottom-1 left-1 bg-black/70 px-1.5 py-0.5 rounded text-[9px] text-white">
+                    @{post.author?.username || 'user'}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="col-span-3 py-16 text-center text-slate-400">
+                <Bookmark size={32} className="mx-auto mb-2 text-slate-600" />
+                <p className="text-sm font-semibold">कोई सहेजी गई पोस्ट नहीं है</p>
+                <p className="text-xs text-slate-500 mt-1">होम फ़ीड में बुकमार्क आइकन दबाकर पोस्ट सहेजें।</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* --- EDIT PROFILE MODAL --- */}
       {isEditing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-md bg-slate-900 rounded-3xl border border-slate-800 p-6 space-y-5 shadow-2xl">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#1E293B] border border-[#334155] rounded-3xl p-5 max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl relative animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-[#334155] mb-4">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Edit3 className="w-4 h-4 text-orange-500" />
-                {t.editProfile}
+                <span>✏️ एडिट प्रोफाइल</span>
               </h3>
               <button
                 onClick={() => setIsEditing(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-white"
+                className="text-slate-400 hover:text-white"
               >
-                <X className="w-5 h-5" />
+                <X size={20} />
               </button>
             </div>
 
             <form onSubmit={handleSaveProfile} className="space-y-4">
-              {/* Avatar Selector */}
+              {/* Avatar Selection */}
               <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-2">
-                  प्रोफ़ाइल फ़ोटो चुनें (Choose Avatar)
+                <label className="block text-xs font-semibold text-slate-300 mb-2">
+                  प्रोफाइल अवतार चुनें:
                 </label>
-                <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                  {AVATAR_PRESETS.map((url, i) => (
-                    <button
-                      type="button"
-                      key={i}
-                      onClick={() => setAvatar(url)}
-                      className={`relative w-12 h-12 rounded-full overflow-hidden border-2 transition shrink-0 ${
-                        avatar === url ? 'border-orange-500 scale-105' : 'border-slate-700 opacity-60'
+                <div className="flex gap-2.5 overflow-x-auto pb-2 no-scrollbar">
+                  {AVATAR_PRESETS.map((p, idx) => (
+                    <img
+                      key={idx}
+                      src={p}
+                      alt="Preset"
+                      onClick={() => setAvatar(p)}
+                      className={`w-12 h-12 rounded-full object-cover cursor-pointer border-2 transition ${
+                        avatar === p ? 'border-[#FF6B00] scale-110 shadow-lg' : 'border-slate-700 opacity-70 hover:opacity-100'
                       }`}
-                    >
-                      <img src={url} alt={`Avatar ${i}`} className="w-full h-full object-cover" />
-                    </button>
+                    />
                   ))}
                 </div>
               </div>
 
-              {/* Full Name */}
+              {/* Name */}
               <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  {t.fullName}
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  पूरा नाम (Full Name)
                 </label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500"
+                  className="w-full bg-[#0F172A] border border-[#334155] rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-[#FF6B00]"
                   required
                 />
               </div>
 
-              {/* Unique Username Handle */}
+              {/* Username */}
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-slate-300">
-                    यूज़रनेम (Unique Handle)
-                  </label>
-                  {editUsername.trim().toLowerCase() !== currentUser.username.toLowerCase() && (
-                    <span className="text-[10px] flex items-center gap-1">
-                      {usernameCheck.checking ? (
-                        <span className="text-slate-400 flex items-center gap-1">
-                          <Loader2 className="w-3 h-3 animate-spin" /> जाँच...
-                        </span>
-                      ) : usernameCheck.available ? (
-                        <span className="text-emerald-400 font-semibold flex items-center gap-0.5">
-                          <Check className="w-3 h-3" /> उपलब्ध है
-                        </span>
-                      ) : usernameCheck.message ? (
-                        <span className="text-rose-400 font-medium">अनुपलब्ध</span>
-                      ) : null}
-                    </span>
-                  )}
-                </div>
-                <div className="relative">
-                  <span className="text-slate-500 font-bold text-xs absolute left-3 top-1/2 -translate-y-1/2">@</span>
-                  <input
-                    type="text"
-                    value={editUsername}
-                    onChange={(e) => setEditUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                    className={`w-full bg-slate-950 border rounded-xl pl-7 pr-3 py-2 text-xs text-white focus:outline-none transition ${
-                      usernameCheck.available === false
-                        ? 'border-rose-500/60'
-                        : usernameCheck.available === true
-                        ? 'border-emerald-500/60'
-                        : 'border-slate-800 focus:border-orange-500'
-                    }`}
-                    required
-                  />
-                </div>
-                {usernameCheck.message && !usernameCheck.available && (
-                  <p className="text-[10px] text-rose-400 mt-1">{usernameCheck.message}</p>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  यूज़रनेम (@username)
+                </label>
+                <input
+                  type="text"
+                  value={editUsername}
+                  onChange={(e) => setEditUsername(e.target.value)}
+                  className="w-full bg-[#0F172A] border border-[#334155] rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-[#FF6B00]"
+                  required
+                />
+                {usernameCheck.message && (
+                  <p className={`text-[11px] mt-1 ${usernameCheck.available ? 'text-emerald-400' : 'text-rose-400'}`}>
+                    {usernameCheck.message}
+                  </p>
                 )}
               </div>
 
               {/* Bio */}
               <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  {t.bio}
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  बायो (Bio)
                 </label>
                 <textarea
+                  rows={3}
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
-                  rows={2}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500 resize-none"
+                  className="w-full bg-[#0F172A] border border-[#334155] rounded-xl p-3 text-sm text-white focus:outline-none focus:border-[#FF6B00] resize-none"
+                  placeholder="अपने बारे में कुछ बताएं..."
                 />
               </div>
 
-              {/* Location */}
-              <div>
-                <label className="text-xs font-semibold text-slate-300 block mb-1">
-                  {t.location}
-                </label>
-                <input
-                  type="text"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-orange-500"
-                />
-              </div>
-
-              {/* Buttons */}
-              <div className="flex items-center gap-2 pt-2">
+              {/* Actions */}
+              <div className="flex gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setIsEditing(false)}
-                  disabled={isSaving}
-                  className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700 transition disabled:opacity-50"
+                  className="flex-1 py-2.5 bg-slate-800 text-slate-300 rounded-xl text-xs font-bold hover:bg-slate-700 transition"
                 >
-                  {t.cancel}
+                  रद्द करें
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving || usernameCheck.available === false}
-                  className="flex-1 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition shadow-md disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1 py-2.5 bg-[#FF6B00] hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-lg shadow-orange-500/20"
                 >
                   {isSaving ? (
                     <>
-                      <Loader2 className="w-4 h-4 animate-spin text-white" />
-                      <span>सहेज रहे हैं...</span>
+                      <Loader2 size={14} className="animate-spin" />
+                      <span>सेव हो रहा है...</span>
                     </>
                   ) : (
-                    <span>{t.saveChanges}</span>
+                    <span>सेव करें 💾</span>
                   )}
                 </button>
               </div>
@@ -545,6 +590,87 @@ export const ProfileView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* --- UPI EARNINGS WITHDRAWAL MODAL --- */}
+      {isWithdrawModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#1E293B] border border-[#334155] rounded-3xl p-5 max-w-sm w-full shadow-2xl relative animate-in fade-in zoom-in-95">
+            <button
+              onClick={() => setIsWithdrawModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="text-center mb-4">
+              <span className="text-3xl">☕</span>
+              <h3 className="text-white font-bold text-base mt-2">
+                सुपर थैंक्स राशि निकालें
+              </h3>
+              <p className="text-slate-300 text-xs mt-1">
+                कुल उपलब्ध बैलेंस: <strong className="text-[#FF6B00] font-mono text-sm">₹{creatorEarnings.toFixed(2)}</strong>
+              </p>
+            </div>
+
+            {withdrawSuccess ? (
+              <div className="py-6 text-center space-y-2">
+                <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto animate-bounce" />
+                <p className="text-white font-bold text-sm">UPI ट्रांसफर सफल! 🎉</p>
+                <p className="text-slate-400 text-xs">राशि आपके बैंक खाते में जमा कर दी गई है।</p>
+              </div>
+            ) : (
+              <form onSubmit={handleExecuteWithdrawal} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    अपना UPI ID (VPA) दर्ज करें:
+                  </label>
+                  <input
+                    type="text"
+                    value={upiWithdrawId}
+                    onChange={(e) => setUpiWithdrawId(e.target.value)}
+                    placeholder="उदा. yourname@okhdfcbank"
+                    className="w-full bg-[#0F172A] border border-[#334155] rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-[#FF6B00] font-mono"
+                    required
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Google Pay, PhonePe, BHIM, Paytm पर तत्काल 0% शुल्क ट्रांसफर।
+                  </p>
+                </div>
+
+                <div className="bg-[#0F172A] p-3 rounded-xl border border-slate-800 text-xs space-y-1.5">
+                  <div className="flex justify-between text-slate-300">
+                    <span>निकासी राशि:</span>
+                    <span className="font-bold text-white font-mono">₹{creatorEarnings.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-400">
+                    <span>प्रोसेसिंग शुल्क:</span>
+                    <span className="text-emerald-400 font-bold">₹0.00 (मुफ्त)</span>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isWithdrawing}
+                  className="w-full bg-[#FF6B00] hover:bg-orange-600 active:scale-95 text-white font-bold py-3 rounded-xl text-xs transition cursor-pointer flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20"
+                >
+                  {isWithdrawing ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin" />
+                      <span>बैंक को ट्रांसफर हो रहा है...</span>
+                    </>
+                  ) : (
+                    <span>सीधे बैंक खाते में ट्रांसफर करें 🚀</span>
+                  )}
+                </button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
     </div>
   );
-};
+}
+
+// Named export for compatibility
+export { ProfileView };

@@ -1,4 +1,4 @@
-import { User, Post, Story, Reel, AppNotification, ReportTicket } from '../types/bharatConnect';
+import { User, Post, Story, Reel, AppNotification, ReportTicket, PromoteCampaign } from '../types/bharatConnect';
 
 export const INITIAL_USERS: User[] = [
   {
@@ -162,6 +162,32 @@ export const initialDummyPosts = [
     likes: 0,
     comments: 0,
     timestamp: '5 दिन पहले',
+  },
+  {
+    id: 'vande_bharat_video_1',
+    user: 'railway_shayar_aman',
+    avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100',
+    location: 'नई दिल्ली रेलवे स्टेशन 🚆',
+    type: 'video',
+    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    posterUrl: 'https://images.unsplash.com/photo-1474487548417-781cb71495f3?w=800',
+    caption: 'वंदे भारत एक्सप्रेस - 130 km/h स्पीड ट्रायल 🔥🚆 मंज़िल की तलाश में दौड़ती भारतीय रेल! #IndianRailways #VandeBharat #BharatConnect ❤️',
+    likes: 6240,
+    comments: 418,
+    timestamp: 'अभी-अभी (Just now)',
+  },
+  {
+    id: 'kashi_aarti_video',
+    user: 'आकाश शर्मा (काशी)',
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100',
+    location: 'दशाश्वमेध घाट, काशी 🪔',
+    type: 'video',
+    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/WeAreGoingOnBullrun.mp4',
+    posterUrl: 'https://images.unsplash.com/photo-1561359313-0639aad4986d?w=800',
+    caption: 'संध्या महा आरती का आलौकिक और मनमोहक दृश्य। हर हर गंगे! 🪔✨ #Varanasi #Kashi #SpiritualIndia',
+    likes: 7850,
+    comments: 532,
+    timestamp: '1 घंटा पहले',
   },
   {
     id: 'railway_1',
@@ -408,7 +434,10 @@ function createDummyPostModel(item: typeof initialDummyPosts[0]): Post {
   };
 
   const isAudio = item.type === 'audio';
+  const isVideo = item.type === 'video' || Boolean(('videoUrl' in item && (item as any).videoUrl));
   const isImage = item.type === 'image';
+  const videoUrl = isVideo ? (('videoUrl' in item && (item as any).videoUrl) || item.mediaUrl) : undefined;
+  const posterUrl = isVideo ? (('posterUrl' in item && (item as any).posterUrl) || item.mediaUrl) : undefined;
 
   return {
     id: `post_dummy_${item.id}`,
@@ -416,10 +445,12 @@ function createDummyPostModel(item: typeof initialDummyPosts[0]): Post {
     author: authorUser,
     caption: item.caption || item.content || '',
     text: item.content || item.caption || '',
-    mediaUrl: item.mediaUrl,
-    imageUrl: item.mediaUrl,
-    imageURL: item.mediaUrl,
-    mediaType: (item.type as 'audio' | 'image' | 'text'),
+    mediaUrl: item.mediaUrl || videoUrl,
+    imageUrl: item.mediaUrl || posterUrl,
+    imageURL: item.mediaUrl || posterUrl,
+    mediaType: (isVideo ? 'video' : isAudio ? 'audio' : isImage ? 'image' : 'text') as 'audio' | 'image' | 'text' | 'video',
+    videoUrl,
+    posterUrl,
     audioURL: isAudio ? (('audioURL' in item && (item as any).audioURL) || 'https://actions.google.com/sounds/v1/ambiences/outdoor_events.ogg') : undefined,
     audioDuration: item.audioDuration || '0:30',
     audioTitle: ('audioTitle' in item && (item as any).audioTitle) || (isAudio ? item.content : undefined),
@@ -576,5 +607,40 @@ export const INITIAL_REPORTS: ReportTicket[] = [
     details: 'Requested credit for historical facts citation.',
     status: 'pending',
     createdAt: '2026-10-21 08:30:00'
+  }
+];
+
+export const INITIAL_CAMPAIGNS: PromoteCampaign[] = [
+  {
+    id: 'camp_840',
+    postId: 'post_dummy_1',
+    postTitle: 'गुरु गोविंद दोउ खड़े, काके लागू पांय...',
+    postText: 'गुरु गोविंद दोउ खड़े, काके लागू पांय। बलिहारी गुरु आपनो, गोविंद दियो बताय॥ भारतीय काव्य धारा और कबीर के दोहे।',
+    postImageUrl: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&auto=format&fit=crop&q=80',
+    postAuthorName: CURRENT_USER.fullName,
+    postAuthorAvatar: CURRENT_USER.avatar,
+    postAuthorHandle: CURRENT_USER.handle,
+    objective: 'post',
+    goal: 'engagement',
+    audienceType: 'auto',
+    language: 'hi',
+    selectedTags: ['कविता', 'साहित्य', 'कबीर', 'प्रेरणा'],
+    dailyBudget: 50,
+    durationDays: 5,
+    totalBudget: 250,
+    gstAmount: 45,
+    grandTotal: 295,
+    abTestEnabled: false,
+    ctaText: '📖 पढ़ना जारी रखें',
+    status: 'running',
+    daysLeft: 4,
+    createdAt: 'कल',
+    totalReach: 840,
+    targetReach: 900,
+    savesCount: 42,
+    likesCount: 110,
+    newFollowersCount: 18,
+    costPerResult: 1.20,
+    smartPauseEnabled: true,
   }
 ];

@@ -73,10 +73,15 @@ async function startServer() {
     });
   });
 
-  // Support --port CLI argument passed by dev supervisor while defaulting safely to 3000
+  // Support --port and --host CLI arguments passed by dev supervisor while defaulting safely
   const portArgIndex = process.argv.indexOf('--port');
   const cliPort = portArgIndex !== -1 && process.argv[portArgIndex + 1] ? Number(process.argv[portArgIndex + 1]) : null;
-  const PORT = cliPort || 3000;
+  const PORT = cliPort || (process.env.PORT ? Number(process.env.PORT) : 3000);
+
+  const hostArgIndex = process.argv.indexOf('--host');
+  const cliHost = hostArgIndex !== -1 && process.argv[hostArgIndex + 1] ? process.argv[hostArgIndex + 1] : null;
+  const HOST = cliHost || process.env.HOST || '0.0.0.0';
+
   const isProduction = process.env.NODE_ENV === 'production';
 
   // 1. Trust proxy (for Railway, Render, Cloud Run)
@@ -544,9 +549,10 @@ async function startServer() {
     res.json({ success: true, message: 'यूज़र को ब्लॉक कर दिया गया है।' });
   });
 
-  // 3. Posts & Feed REST API
+  // 3. Posts & Feed REST API (Push / Fan-out on Write Inbox Feed Support)
   app.get('/api/v1/posts/feed', async (req: Request, res: Response) => {
-    const posts = await dbService.getFeedPosts();
+    const userId = (req.query.userId as string) || (req as any).user?.id;
+    const posts = userId ? await dbService.getUserInboxFeed(userId) : await dbService.getFeedPosts();
     res.json({
       success: true,
       count: posts.length,
@@ -803,14 +809,26 @@ async function startServer() {
   } else {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: { 
+        middlewareMode: true,
+        hmr: false,
+        watch: null
+      },
       appType: 'spa'
     });
     app.use(vite.middlewares);
   }
 
-  server.listen(PORT, '0.0.0.0', () => {
-    logger.info(`🇮🇳 BharatConnect Production Hardened Server running on port ${PORT} with WebSockets & Real-Time Fan-Out`);
+  server.on('error', (err: any) => {
+    if (err.code === 'EADDRINUSE') {
+      logger.error(`Port ${PORT} is in use, retrying connection release...`);
+    } else {
+      logger.error('Server network error:', err);
+    }
+  });
+
+  server.listen(PORT, HOST, () => {
+    logger.info(`🇮🇳 BharatConnect Server running on http://${HOST}:${PORT} with WebSockets & Real-Time Fan-Out`);
     logger.info(`🛡️ Security middleware, Helmet CSP, Rate Limiting, and Zod validation active`);
   });
 }

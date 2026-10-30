@@ -24,6 +24,7 @@ import { LoginPage } from './components/bharatConnect/LoginPage';
 import { AuthModal } from './components/bharatConnect/AuthModal';
 import { SOSModal } from './components/bharatConnect/SOSModal';
 import { UserProfileModal } from './components/bharatConnect/UserProfileModal';
+import { PromoteModal } from './components/bharatConnect/PromoteModal';
 import { LandingPageView } from './components/bharatConnect/LandingPageView';
 import { NetworkStatusBanner } from './components/bharatConnect/NetworkStatusBanner';
 import { AppErrorBoundary } from './components/bharatConnect/AppErrorBoundary';
@@ -222,6 +223,9 @@ const BharatConnectContent: React.FC = () => {
 
       {/* Bharat Sahara SOS Emergency Network Modal */}
       <SOSModal />
+
+      {/* Mobile-First Promote & Boost Modal with 4-Screen Flow */}
+      <PromoteModal />
 
       {/* Global Interactive Toast Notification */}
       {toastMessage && (

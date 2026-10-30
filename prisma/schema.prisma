@@ -30,29 +30,32 @@ model User {
   rsvps        EventRsvp[]
   orders       Order[]
   bookmarks    Bookmark[]
+  feedInbox    FeedInbox[]
 
   @@map("users")
 }
 
 model Post {
-  id            String     @id @default(uuid())
+  id            String      @id @default(uuid())
   authorId      String
   content       String
   imageUrl      String?
   audioUrl      String?
-  likesCount    Int        @default(0)
-  commentsCount Int        @default(0)
-  sharesCount   Int        @default(0)
-  isDilSe       Boolean    @default(false)
-  tags          String[]   @default([])
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  likesCount    Int         @default(0)
+  commentsCount Int         @default(0)
+  sharesCount   Int         @default(0)
+  isDilSe       Boolean     @default(false)
+  tags          String[]    @default([])
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
-  author        User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  author        User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
   comments      Comment[]
   reactions     Reaction[]
   bookmarks     Bookmark[]
+  feedInbox     FeedInbox[]
 
+  @@index([authorId, createdAt(sort: Desc)], name: "idx_posts_user_created")
   @@map("posts")
 }
 
@@ -96,7 +99,22 @@ model Follow {
   following   User     @relation("FollowingUsers", fields: [followingId], references: [id], onDelete: Cascade)
 
   @@unique([followerId, followingId])
+  @@index([followerId], name: "idx_follows_follower")
+  @@index([followingId], name: "idx_follows_followee")
   @@map("follows")
+}
+
+model FeedInbox {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  postId    String   @map("post_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)], name: "idx_feed_inbox_user_created")
+  @@map("feed_inbox")
 }
 
 model Group {

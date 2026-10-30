@@ -91,7 +91,7 @@ export const dbService = {
     return INITIAL_USERS.find((u) => u.username.toLowerCase() === clean) || null;
   },
 
-  // 2. Posts
+  // 2. Posts & Push / Fan-out on Write Feed Architecture
   async getFeedPosts() {
     if (this.isDatabaseConfigured()) {
       try {
@@ -139,6 +139,48 @@ export const dbService = {
     ];
   },
 
+  // Ultra-fast personalized feed query using feed_inbox (O(1) Indexed read)
+  async getUserInboxFeed(userId: string, limit = 20) {
+    if (this.isDatabaseConfigured()) {
+      try {
+        const prisma = getPrisma();
+        const entries = await prisma.feedInbox.findMany({
+          where: { userId },
+          include: {
+            post: {
+              include: { author: true }
+            }
+          },
+          orderBy: { createdAt: 'desc' },
+          take: limit
+        });
+        if (entries.length > 0) {
+          return entries.map((e) => ({
+            id: e.post.id,
+            caption: e.post.content,
+            imageUrl: e.post.imageUrl || '',
+            likesCount: e.post.likesCount,
+            commentsCount: e.post.commentsCount,
+            sharesCount: e.post.sharesCount,
+            tags: e.post.tags,
+            createdAt: e.post.createdAt.toISOString(),
+            author: {
+              id: e.post.author.id,
+              username: e.post.author.username,
+              fullName: e.post.author.fullName,
+              avatar: e.post.author.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+              verified: e.post.author.verified
+            }
+          }));
+        }
+      } catch (err) {
+        console.warn('Prisma getUserInboxFeed query fallback:', err);
+      }
+    }
+    return this.getFeedPosts();
+  },
+
+  // Create post with Push / Fan-out on Write to followers' feed_inbox
   async createPost(data: { authorId?: string; caption: string; imageUrl?: string; tags?: string[]; isDilSe?: boolean }) {
     if (this.isDatabaseConfigured()) {
       try {
@@ -159,6 +201,25 @@ export const dbService = {
               isDilSe: Boolean(data.isDilSe)
             }
           });
+
+          // Push / Fan-out on Write: Broadcast post to followers' feed_inbox
+          try {
+            const followers = await prisma.follow.findMany({
+              where: { followingId: authorId },
+              select: { followerId: true }
+            });
+            const inboxEntries = [
+              { userId: authorId, postId: created.id }, // author self-timeline
+              ...followers.map((f) => ({ userId: f.followerId, postId: created.id }))
+            ];
+            await prisma.feedInbox.createMany({
+              data: inboxEntries,
+              skipDuplicates: true
+            });
+          } catch (fanoutErr) {
+            console.warn('Push Fan-out on Write notice:', fanoutErr);
+          }
+
           return created;
         }
       } catch (err) {

@@ -14,6 +14,7 @@ import {
 import { 
   getFirestore, 
   initializeFirestore,
+  setLogLevel,
   doc, 
   getDoc, 
   setDoc, 
@@ -63,6 +64,11 @@ export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({
   prompt: 'select_account'
 });
+
+// Suppress internal transient WebChannel reconnection warnings in sandboxed iframes
+try {
+  setLogLevel('silent');
+} catch {}
 
 // Initialize Firestore (with databaseId support & long polling for iframe preview stability)
 const firestoreDbId = firebaseConfig.firestoreDatabaseId && firebaseConfig.firestoreDatabaseId !== '(default)'

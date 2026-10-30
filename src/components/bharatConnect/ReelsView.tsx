@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useBharatConnect } from '../../context/BharatConnectContext';
-import { Heart, MessageCircle, Share2, Music, CheckCircle2, MoreVertical, ChevronDown, ChevronUp, Volume2, VolumeX, Play, Pause, Radio } from 'lucide-react';
+import { Heart, MessageCircle, Share2, Music, CheckCircle2, MoreVertical, ChevronDown, ChevronUp, Volume2, VolumeX, Play, Pause, Radio, Plus } from 'lucide-react';
 import { ReportModal } from './ReportModal';
 import { Post } from '../../types/bharatConnect';
 
@@ -10,7 +10,8 @@ export const ReelsView: React.FC = () => {
     toggleLikeReel, 
     toggleFollowUser, 
     users, 
-    setToastMessage 
+    setToastMessage,
+    setActiveTab 
   } = useBharatConnect();
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -21,9 +22,46 @@ export const ReelsView: React.FC = () => {
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const currentReel = reels[currentIndex] || reels[0];
   const creatorUser = users.find((u) => u.id === currentReel?.author?.id) || currentReel?.author;
+
+  // IntersectionObserver: Automatically start playback when video enters viewport and pause when it exits
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('IntersectionObserver' in window)) {
+      return;
+    }
+
+    const targetEl = containerRef.current || videoRef.current;
+    if (!targetEl) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry) return;
+
+        // When video is at least 50% visible in the viewport, start playback
+        if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+          setIsPlaying(true);
+        } else {
+          // When video exits or drops below visibility threshold, pause playback
+          setIsPlaying(false);
+        }
+      },
+      {
+        threshold: [0, 0.5, 0.75],
+        rootMargin: '0px',
+      }
+    );
+
+    observer.observe(targetEl);
+
+    return () => {
+      observer.unobserve(targetEl);
+      observer.disconnect();
+    };
+  }, [currentIndex]);
 
   // Sync Video & Audio playback, volume, and mute status
   useEffect(() => {
@@ -130,7 +168,10 @@ export const ReelsView: React.FC = () => {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-120px)] p-2 sm:p-4">
-      <div className="relative w-full max-w-[390px] h-[680px] bg-black rounded-3xl overflow-hidden shadow-2xl border border-slate-800 flex flex-col justify-between">
+      <div 
+        ref={containerRef}
+        className="relative w-full max-w-[390px] h-[680px] bg-black rounded-3xl overflow-hidden shadow-2xl border border-slate-800 flex flex-col justify-between"
+      >
         
         {/* Real HTML5 Video Playback Element */}
         <div 
@@ -145,7 +186,6 @@ export const ReelsView: React.FC = () => {
             poster={currentReel.posterUrl}
             loop
             playsInline
-            autoPlay
             muted={isMuted}
             className="w-full h-full object-cover"
           />
@@ -202,6 +242,15 @@ export const ReelsView: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveTab('create')}
+              className="px-2.5 py-1 rounded-full bg-gradient-to-r from-orange-500/80 to-amber-500/80 hover:from-orange-500 hover:to-amber-500 text-white text-xs font-bold flex items-center gap-1 backdrop-blur-md shadow-sm active:scale-95 transition cursor-pointer"
+              title="अपनी नई रील बनाएं"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>रील बनाएं</span>
+            </button>
+
             <button 
               onClick={handleToggleSound}
               className={`p-2 rounded-full backdrop-blur-md transition active:scale-95 cursor-pointer ${
